@@ -7,15 +7,18 @@ def get_user_by_phone(phone: str):
 
     Args:
         phone (str): The phone number of the user.
+
+    Returns:
+        tuple: (user details | None, error | None)
     """
     try:
         response = supabase.table("profile").select("*").eq("phone", phone).execute()
         if response.data:
-            return response.data[0]
-        return None
+            return response.data[0], None
+        return None, None
     except Exception as e:
         print(f"Error fetching user by phone: {e}")
-        return None
+        return None, e
     
 
 def get_user_by_email(email: str):
@@ -24,13 +27,16 @@ def get_user_by_email(email: str):
 
     Args:
         email (str): The email of the user.
+
+    Returns:
+        tuple: (user details | None, error | None)
     """
     try:
         response = supabase.table("profile").select("*").eq("email", email).execute()
         if response.data:
-            return response.data[0]
-        return None
+            return response.data[0], None
+        return None, None
     except Exception as e:
         print(f"Error fetching user by email: {e}")
-        return None
+        return None, e
     

@@ -21,7 +21,7 @@ class SupabaseJWTMiddleware(ResponseMixin):
             if user_info:
                 request.supabase_user = user_info
             else:
-                return JsonResponse({"detail": "Invalid Supabase token"}, status=401)
+                return JsonResponse({"detail": "Invalid Supabase or expired token"}, status=401)
         else:
             request.supabase_user = None
 
