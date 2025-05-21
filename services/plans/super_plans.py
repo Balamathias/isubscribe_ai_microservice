@@ -67,3 +67,37 @@ def get_super_plan_by_id(plan_id: str) -> tuple[(List[dict] | None), (Exception 
             return None, Exception({"message": "No data plans found."})
     except Exception as e:
         return None, e
+    
+
+def filter_super_plans(
+        network: str | None,
+        plan_type: str | None,
+        price: int | None,
+) -> tuple[(List[dict] | None), (Exception | None)]:
+    """
+    Filter data plans from the "super" category based on network, plan type, and price.
+
+    Args:
+        network (str | None): The network to filter the data plans.
+        plan_type (str | None): The plan type to filter the data plans.
+        price (int | None): The price to filter the data plans.
+
+    Returns:
+        list: A list of filtered data plans.
+    """
+    
+    try:
+        query = supabase.table("n3t").select("*")
+        if network:
+            query = query.eq("network", network)
+        if plan_type:
+            query = query.eq("plan_type", plan_type)
+        if price:
+            query = query.lte("price", price)
+
+        data_plans = query.execute()
+        if data_plans.data:
+            return data_plans.data, None
+        return None, Exception({"message": "No data plans found."})
+    except Exception as e:
+        return None, e

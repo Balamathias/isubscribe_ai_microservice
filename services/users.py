@@ -40,3 +40,23 @@ def get_user_by_email(email: str):
         print(f"Error fetching user by email: {e}")
         return None, e
     
+
+def get_user_by_id(user_id: str):
+    """
+    Fetch user details from Supabase by user ID.
+
+    Args:
+        user_id (str): The ID of the user.
+
+    Returns:
+        tuple: (user details | None, error | None)
+    """
+    try:
+        response = supabase.table("profile").select("*").eq("id", user_id).execute()
+        if response.data:
+            return response.data[0], None
+        return None, None
+    except Exception as e:
+        print(f"Error fetching user by ID: {e}")
+        return None, e
+    

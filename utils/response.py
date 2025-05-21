@@ -1,3 +1,4 @@
+from typing import Dict, Any, Optional, List, Union
 from rest_framework.response import Response
 from rest_framework import status as drf_status
 
@@ -11,25 +12,40 @@ class ResponseMixin:
 
     def response(
         self, 
-        data=None, 
-        message="", 
-        status_code=drf_status.HTTP_200_OK, 
+        data: Any = None, 
+        message: str = "", 
+        error: Union[Dict, List, str, None] = None,
+        status_code: int = drf_status.HTTP_200_OK, 
         status=None,
-        error=None,
         count=None,
         next=None,
         previous=None
-    ):
+    ) -> Response:
         """
         Standard response format for API endpoints
+        
+        Args:
+            data: The data to return in the response
+            message: A human-readable message about the response
+            error: Error details if applicable
+            status_code: HTTP status code
+            
+        Returns:
+            A DRF Response object with standardized structure
         """
         response_data = {
-            "message": message,
-            "data": data,
-            "status": status_code,
-            "error": error
+            "status": "success" if not error else "error",
         }
         
+        if message:
+            response_data["message"] = message
+            
+        if data is not None:
+            response_data["data"] = data
+            
+        if error is not None:
+            response_data["error"] = error
+            
         if count is not None:
             response_data["count"] = count
         if next is not None:
@@ -37,5 +53,4 @@ class ResponseMixin:
         if previous is not None:
             response_data["previous"] = previous
             
-        return Response(data=response_data, status= status or status_code)
-    
+        return Response(data=response_data, status=status or status_code)
