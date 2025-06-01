@@ -59,3 +59,4 @@ class SupabaseAuthentication(BaseAuthentication):
         except Exception:
             logger.exception("Error verifying Supabase token")
             return None
+

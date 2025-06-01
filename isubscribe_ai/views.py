@@ -1,8 +1,14 @@
+import os
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+
+from auth.supabase import SupabaseAuthentication
+from isubscribe_ai.csrf_exemption import CsrfExemptSessionAuthentication
 from services.wallet import get_user_wallet
 
 from rest_framework.viewsets import ViewSet, ModelViewSet
@@ -14,7 +20,7 @@ from services.ai_agent import run_ai_agent
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from services.whatsapp import whatsapp_client
-import os
+from services.palmpay import PalmPayService, PalmPayCreateAccountRequest
 
 
 class WalletViewSet(viewsets.ViewSet, ResponseMixin):
@@ -215,3 +221,66 @@ class WhatsAppWebhookView(APIView):
                 {"status": "error", "message": result.get("error")},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+from django.utils.decorators import method_decorator
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CreateVirtualAccountAPIView(APIView, ResponseMixin):
+    authentication_classes = [SupabaseAuthentication]
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            customer_name = request.data.get("customer_name")
+            email = request.data.get("email")
+            
+            if not customer_name or not email:
+                return self.response(
+                    {
+                        "message": "customer_name and email are required.",
+                        "error": {"detail": "Missing required fields"},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            palm_pay_service = PalmPayService()
+            request_data = PalmPayCreateAccountRequest(
+                customer_name=customer_name,
+                email=email
+            )
+            
+            response = palm_pay_service.create_virtual_account(request_data)
+            print("PalmPay response:", response)
+            
+            if response.status:
+                return self.response(
+                    {
+                        "virtual_account_no": response.data.virtual_account_no,
+                        "virtual_account_name": response.data.virtual_account_name,
+                        "account_reference": response.data.account_reference,
+                        "status": response.data.status,
+                        "message": response.resp_msg,
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
+            else:
+                return self.response(
+                    {
+                        "message": response.resp_msg,
+                        "error": {"detail": f"PalmPay error: {response.resp_msg}"},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+                
+        except Exception as e:
+            print(f"Error creating PalmPay virtual account: {e}")
+            return self.response(
+                {
+                    "message": "Failed to create virtual account.",
+                    "error": {"detail": str(e)},
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        

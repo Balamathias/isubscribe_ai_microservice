@@ -1,29 +1,44 @@
 from core.thread_local import get_current_user
 from services.supabase import supabase
+from core.context import AgentContext
 
+# get_user_info_declaration = {
+#     "name": "get_user_info",
+#     "description": "Retrieves user details including phone, email, wallet balance, cashback balance, first name, and last name.",
+#     "parameters": {
+#         "type": "object",
+#         "properties": {
+#             "user_id": {
+#                 "type": "string",
+#                 "description": "The user ID whose information is to be retrieved."
+#             }
+#         }
+#     }
+# }
 
 def get_user_info() -> dict:
     """
-    Get the details of the current user including phone, email, and wallet balance, first name, and last name and cashback balance.
-
+    Fetches user information including wallet balance and cashback balance in Naira (₦).
     Returns:
-        dict: User details including phone, email, and wallet balance and cashback balance.
+        A dictionary containing user information or an error message.
     """
+    user = AgentContext.get_current_user()
+    print("Fetching user info...", user)
+
+    user_id = user.id if user else None
     try:   
-        user = get_current_user()
-        if not user:
+        if not user_id:
             return {"error": "User not found"}
         
-        wallet = supabase.table("wallet").select("balance, cashback_balance, profile (*)").eq("user", user.id).single().execute()
+        wallet = supabase.table("wallet").select("*").eq("user", str(user_id)).execute()
+        print(f"Wallet data: {wallet.data}")
 
         user_info = {
-            "id": user.id,
-            "phone": wallet.data.profile.phone if wallet.data else 0,
-            "email": wallet.data.profile.email if wallet.data else 0,
-            "wallet_balance": wallet.data.balance if wallet.data else 0,
-            "cashback_balance": wallet.data.cashback_balance if wallet.data else 0,
-            "first_name": wallet.data.profile.first_name if wallet.data else 0,
-            "last_name": wallet.data.profile.last_name if wallet.data else 0,
+            "id": user_id,
+            "phone": user.phone,
+            "email": user.email,
+            "wallet_balance": getattr(wallet.data[0], "balance", 0) if wallet.data else 0,
+            "cashback_balance": getattr(wallet.data[0], "cashback_balance", 0) if wallet.data else 0,
         }
         return user_info
     

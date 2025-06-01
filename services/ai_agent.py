@@ -15,7 +15,10 @@ from services.functions.plans import (
 
 from services.functions.user import (
     get_user_info,
+    # get_user_info_declaration
 )
+
+# DECLARATION_TOOLS = types.Tool(function_declarations=[get_user_info_declaration])
 
 
 BASE_TOOLS = [
@@ -57,7 +60,11 @@ def run_ai_agent(user_input: Optional[str] = None,
     Returns:
         Dict with either content or tool_result keys depending on the AI's response.
     """
+    from core.context import AgentContext
+
     user = getattr(request, "user", None)
+
+    AgentContext.set_current_user(user)
 
     tools = BASE_TOOLS
 
@@ -94,6 +101,43 @@ def run_ai_agent(user_input: Optional[str] = None,
             config=config,
             contents=contents
         )
+
+        # print(f"Response: {response}")
+
+        # tool_call = response.candidates[0].content.parts[0].function_call
+
+        # print(f"Tool call: {tool_call}")
+
+        # if tool_call and tool_call.name == "get_user_info":
+        #     result = get_user_info(user.id)
+
+        #     print(f"Tool result: {result}")
+
+        #     function_response_part = types.Part.from_function_response(
+        #         name=tool_call.name,
+        #         response={"result": result},
+        #     )
+
+        #     # Append function call and result of the function execution to contents
+        #     contents.append(types.Content(role="model", parts=[types.Part(function_call=tool_call)])) # Append the model's function call message
+        #     contents.append(types.Content(role="user", parts=[function_response_part])) # Append the function response
+
+        #     try:
+        #         final_response = genai.models.generate_content(
+        #             model=model,
+        #             config=config,
+        #             contents=contents,
+        #         )
+
+        #         return {
+        #             "tool_call": tool_call,
+        #             "tool_result": result,
+        #             "content": final_response.text
+        #         }
+        #     except Exception as e:
+        #         print(f"Error in final response generation: {e}")
+        #         return {"error": str(e)}
+
         return {"content": response.text}
 
     except Exception as e:
