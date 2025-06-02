@@ -44,7 +44,7 @@ class ResponseMixin:
             response_data["data"] = data
             
         if error is not None:
-            response_data["error"] = error
+            setattr(response_data, "error", error)
             
         if count is not None:
             response_data["count"] = count
