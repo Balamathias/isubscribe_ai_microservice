@@ -10,10 +10,11 @@ router.register(r'wallets', WalletViewSet, basename='wallet')
 router.register(r'chats', ChatViewSet, basename='chat')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path("health/", health_check, name="health_check"),
     path('whatsapp/webhook/', WhatsAppWebhookView.as_view(), name='whatsapp_webhook'),
     path('palmpay/create_virtual_account/', CreateVirtualAccountAPIView.as_view(), name='create_virtual_account'),
-    path("health/", health_check, name="health_check"),
+    
+    path('', include(router.urls)),
 ]
 
 if settings.DEBUG:
