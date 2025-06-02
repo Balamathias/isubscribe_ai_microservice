@@ -1,17 +1,18 @@
 import os
 
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.views.decorators.csrf import csrf_exempt
-
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from rest_framework.viewsets import ViewSet, ModelViewSet
 
 from auth.supabase import SupabaseAuthentication
 from isubscribe_ai.csrf_exemption import CsrfExemptSessionAuthentication
 from services.wallet import get_user_wallet
 
-from rest_framework.viewsets import ViewSet, ModelViewSet
 
 from utils.response import ResponseMixin
 from .models import Chat, Message
@@ -284,3 +285,6 @@ class CreateVirtualAccountAPIView(APIView, ResponseMixin):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         
+
+def health_check(request):
+    return JsonResponse({"status": "ok"})
