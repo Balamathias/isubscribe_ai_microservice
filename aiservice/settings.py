@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
 
     'isubscribe_ai',
+    'mobile',
 ]
 
 MIDDLEWARE = [
