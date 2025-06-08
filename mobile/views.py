@@ -132,8 +132,6 @@ class LatestTransactionsView(APIView, ResponseMixin):
                 .limit(3)\
                 .execute()
             
-            print(response)
-
             return self.response(
                 data=response.data,
                 status_code=status.HTTP_200_OK,
@@ -197,7 +195,7 @@ class ProcessTransaction(APIView, ResponseMixin):
                     return self.response(
                         error={"detail": str(e)},
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        message="An unknown error occurred"
+                        message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
                     )
 
 
@@ -211,7 +209,7 @@ class ProcessTransaction(APIView, ResponseMixin):
             return self.response(
                 error={"detail": str(e)},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message="An unknown error occurred"
+                message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
             )
 
 
@@ -234,7 +232,7 @@ class VerifyPinView(APIView, ResponseMixin):
         try:
             profile = request.supabase_client.table('profile')\
                 .select('pin')\
-                .eq('user', request.user.id)\
+                .eq('id', request.user.id)\
                 .single()\
                 .execute()
                 
@@ -268,7 +266,5 @@ class VerifyPinView(APIView, ResponseMixin):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="Failed to verify PIN"
             )
-
-
 
 

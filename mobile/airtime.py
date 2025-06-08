@@ -69,8 +69,6 @@ def process_airtime(request: Any):
 
     CB = 0.01
 
-    print('Request OBJ', request)
-
     supabase: Client = request.supabase_client
 
     network = request.data.get('network')
@@ -85,10 +83,15 @@ def process_airtime(request: Any):
     amount = request.data.get('amount')
     if not amount:
         raise ValueError("Amount is required")
+    if amount < 25:
+        raise ValueError(f'Airtime amount below {amount:.2f} not allowed.')
 
     request_id = generate(size=24)
 
     payment_method = request.data.get('payment_method', 'wallet')
+
+    if payment_method not in ['wallet', 'cashback']:
+        raise Exception('Unknown payment method selected.')
 
     cashback_balance = 0
     balance = 0
@@ -106,7 +109,8 @@ def process_airtime(request: Any):
         print("SUP Wal EXC", e)
         raise Exception(f"Failed to fetch wallet: {str(e)}")
 
-    def charge_wallet(method: str):
+    def charge_wallet(method: str = 'wallet'):
+        return_cashback = (amount * CB)
         if method == 'wallet':
             if balance < amount:
                 return {
@@ -114,12 +118,16 @@ def process_airtime(request: Any):
                 }
             
             try:
-                supabase.rpc('modify_wallet_balance', {
+                response = supabase.rpc('charge_wallet', {
                     'user_id': str(request.user.id),
-                    'amount': -float(amount),  # Deduct the amount
-                    'new_cashback_balance': cashback_balance + (amount * CB)
-                })
+                    'amount': float(amount),
+                    'cashback': return_cashback,
+                    'charge_from': method
+                }).execute()
+                print(f"RPC Result: ", response)
+
             except Exception as e:
+                print("RPC Error: ", e)
                 return { 'error': str(e) }
 
         if method == 'cashback':
@@ -129,13 +137,20 @@ def process_airtime(request: Any):
                 }
             
             try:
-                supabase.rpc('modify_wallet_balance', {
+                supabase.rpc('charge_wallet', {
                     'user_id': str(request.user.id),
-                    'amount': 0,
-                    'new_cashback_balance': (cashback_balance - amount) + (amount * CB)
-                })
+                    'amount': float(amount),
+                    'cashback': return_cashback,
+                    'charge_from': method
+                }).execute()
             except Exception as e:
                 return { 'error': str(e) }
+    
+    if payment_method == 'wallet' and balance < amount:
+        raise ValueError(f"Insufficient wallet balance. Required: {amount}, Available: {balance}")
+    
+    if payment_method == 'cashback' and cashback_balance < amount:
+        raise ValueError(f"Insufficient cashback balance. Required: {amount}, Available: {cashback_balance}")
             
     response = buy_airtime(
         request_id=request_id,
