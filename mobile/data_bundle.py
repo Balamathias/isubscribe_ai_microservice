@@ -9,12 +9,64 @@ import requests
 from utils import format_data_amount
 
 from pytypes.data_bundle import Payload as SuperPayload, ResponseData, GsubPayload, GsubResponse
-from .response_code import GSUB_RESPONSE_CODES
+from pytypes.vtpass import VTPassTransactionResponse, VTPassTransactionRequest
+
+from .response_code import GSUB_RESPONSE_CODES, RESPONSE_CODES
 
 load_dotenv()
 
 N3T_TOKEN = os.getenv("N3TDATA_TOKEN")
 N3T_BASE_URL = 'https://n3tdata.com/api'
+
+VTPASS_API_KEY = os.getenv("VT_API_KEY")
+VTPASS_SECRET_KEY = os.getenv("VT_SECRET_KEY")
+VTPASS_BASE_URL = os.getenv("VT_LIVE_BASE_URL")
+
+def get_regular_bundle(
+    request_id: str,
+    serviceID: Literal['mtn-data', 'glo-data', 'airtel-data', '9mobile-data'],
+    phone: Union[int, str],
+    variation_code: str,
+    amount: Optional[float] = None,
+) -> Optional[VTPassTransactionResponse]:
+    
+    payload: VTPassTransactionRequest = {
+        "request_id": request_id,
+        "serviceID": serviceID,
+        "billersCode": phone,
+        "variation_code": variation_code,
+        "phone": phone,
+    }
+
+    if amount is not None:
+        payload["amount"] = amount
+
+    headers = {
+        "api-key": VTPASS_API_KEY,
+        "secret-key": VTPASS_SECRET_KEY,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers)
+        print("DATABSTATS:", res.reason, res.status_code)
+
+        if res.status_code != 200:
+            raise RuntimeError(f"Failed to buy data bundle: {res.text}")
+
+        response_data = res.json()
+        if not response_data:
+            raise RuntimeError("Empty response from server")
+            
+        return response_data
+    except requests.exceptions.HTTPError as e:
+        raise RuntimeError(f"HTTP error occurred: {e.response.status_code} - {e.response.reason}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Request failed: {str(e)}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error: {str(e)}")
+
+
 
 def get_super_bundle(payload: SuperPayload) -> Union[ResponseData, None]:
     headers = {
@@ -428,5 +480,125 @@ def process_data_bundle(request: Any):
         else:
             raise Exception('An unknown occured while trying to process request.')
         
+
+    if category == 'regular':
+        plan_id = request.data.get('plan_id')
+
+        if not plan_id:
+            raise ValueError('Plan ID as plan_id is required.')
+        
+        data_plan = (supabase.table('vtpass')\
+            .select('*')\
+            .eq('id', plan_id).single().execute()).data
+        
+        amount = data_plan.get('price', 0) + data_plan.get('commission', 0)
+
+        response = get_regular_bundle(
+            phone=phone,
+            serviceID=data_plan.get('service_id'),
+            request_id=generate(size=24),
+            variation_code=data_plan.get('value'),
+        )
+
+        if not response:
+            raise Exception('No response was received from the server')
+
+        code = response.get('code')
+        if not code:
+            raise Exception('Invalid response format: missing code')
+
+        content = response.get('content', {})
+        transactions = content.get('transactions', {})
+        commission = transactions.get('commission', 0)
+
+        payload = {
+            'title': 'Data Subscription',
+            'status': 'success',
+            'description': f'Data bundle purchased successfully for {phone}',
+            'user': request.user.id,
+            'amount': amount,
+            'provider': 'vtpass',
+            'type': 'data_topup',
+            'commission': commission,
+            'balance_before': balance,
+            'balance_after': balance - amount,
+        }
+
+        return_cashback = amount * CASHBACK_VALUE
+
+        if code == '000':
+            cw = charge_wallet(amount=amount, method=payment_method)
+            if cw and cw.get('error'):
+                raise Exception(cw.get('error'))
+
+            history_response = supabase.table('history')\
+                .insert(payload)\
+                .execute()
+            
+            if not history_response.data:
+                raise Exception("Failed to insert transaction history")
+
+            payload['title'] = 'Data Bonus'
+            payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
+            payload['amount'] = return_cashback
+            payload['type'] = 'cashback'
+            payload['meta_data'] = { **data_plan, 'data_bonus': format_data_amount(return_cashback) }
+
+            cashback_response = supabase.table('history')\
+                .insert(payload)\
+                .execute()
+            
+            if not cashback_response.data:
+                raise Exception("Failed to insert cashback history")
+            
+            return {
+                'success': True,
+                'data': {
+                    **data_plan,
+                    **history_response.data[0],
+                    'data_bonus': format_data_amount(return_cashback)
+                }
+            }
+
+        elif code == '099':
+            payload['status'] = 'pending'
+            payload['description'] = 'Transaction Pending.'
+
+            history_response = supabase.table('history')\
+                .insert(payload)\
+                .execute()
+            
+            if not history_response.data:
+                raise Exception("Failed to insert pending transaction history")
+            
+            return {
+                'success': False,
+                'data': {
+                    **data_plan,
+                    **history_response.data[0]
+                },
+                'status': 'pending'
+            }
+        else:
+            payload['status'] = 'failed'
+            payload['description'] = RESPONSE_CODES.get(code, {}).get('message', 'Unknown error')
+            payload['balance_before'] = balance
+            payload['balance_after'] = balance
+
+            history_response = supabase.table('history')\
+                .insert(payload)\
+                .execute()
+            
+            if not history_response.data:
+                raise Exception("Failed to insert failed transaction history")
+            
+            return {
+                'success': False,
+                'data': {
+                    **data_plan,
+                    **history_response.data[0]
+                }
+            }
+
     else:
         raise Exception('The selected category could not be recognized.')

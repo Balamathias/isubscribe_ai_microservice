@@ -230,7 +230,7 @@ class ProcessTransaction(APIView, ResponseMixin):
                 
                 except Exception as e:
                     print(e)
-                    self.response(
+                    return self.response(
                         error={"detail": str(e)},
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
@@ -354,11 +354,22 @@ class ListDataPlansView(APIView, ResponseMixin):
                 'price': plan.get('price', 0) + plan.get('commission', 0), # This has to be done for DB commissioning
                 'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE)
             } for plan in best_plans.data]
+
+            regular_plans = supabase.table('vtpass')\
+                .select('*')\
+                .eq('is_active', True)\
+                .execute()
+            
+            regular_plans = [{
+                **plan,
+                'price': plan.get('price', 0) + plan.get('commission', 0), # This has to be done for DB commissioning
+                'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE)
+            } for plan in regular_plans.data]
             
             payload = {
                 'Super': super_plans,
                 'Best': best_plans,
-                'Regular': []
+                'Regular': regular_plans
             }
             
             return self.response(
