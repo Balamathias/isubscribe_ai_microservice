@@ -256,9 +256,11 @@ class VerifyPinView(APIView, ResponseMixin):
     permission_classes = []
     
     def post(self, request):
-        from .bcrypt import verify_pin
+        from .bcrypt import verify_pin, hash_pin
         
         pin = request.data.get('pin')
+        action = request.data.get('action', 'verify')
+
         if not pin:
             return self.response(
                 error={"detail": "PIN is required"},
@@ -267,6 +269,20 @@ class VerifyPinView(APIView, ResponseMixin):
             )
         
         try:
+            if action == 'new':
+                hashed_pin = hash_pin(pin)
+                
+                response = request.supabase_client.table('profile')\
+                    .update({'pin': hashed_pin, 'onboarded': True})\
+                    .eq('id', request.user.id)\
+                    .execute()
+                
+                return self.response(
+                    data={"pin_set": True},
+                    status_code=status.HTTP_200_OK,
+                    message="PIN set successfully"
+                )
+            
             profile = request.supabase_client.table('profile')\
                 .select('pin')\
                 .eq('id', request.user.id)\
