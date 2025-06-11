@@ -28,3 +28,39 @@ RESPONSE_CODES = {
         'title': 'TRANSACTION_PENDING'
     }
 }
+
+
+GSUB_RESPONSE_CODES = {
+    '204': {
+        'message': 'Required content not sent. Please check your request parameters.',
+        'title': 'REQUIRED_CONTENT_NOT_SENT'
+    },
+    '206': {
+        'message': 'Invalid content provided. Please verify your request data.',
+        'title': 'INVALID_CONTENT'
+    },
+    '401': {
+        'message': 'Invalid plan selected. Please choose a valid plan.',
+        'title': 'INVALID_PLAN'
+    },
+    '402': {
+        'message': 'Insufficient balance to complete this transaction.',
+        'title': 'INSUFFICIENT_BALANCE'
+    },
+    '404': {
+        'message': 'Requested content not found.',
+        'title': 'CONTENT_NOT_FOUND'
+    },
+    '405': {
+        'message': 'Invalid request method. Only POST requests are allowed.',
+        'title': 'REQUEST_METHOD_NOT_IN_POST'
+    },
+    '406': {
+        'message': 'This service is currently disabled. Please try again later.',
+        'title': 'SERVICE_DISABLED'
+    },
+    '502': {
+        'message': 'Gateway error occurred. Please try again later.',
+        'title': 'GATEWAY_ERROR'
+    }
+}

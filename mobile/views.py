@@ -7,6 +7,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from auth.supabase import SupabaseAuthentication
 
+from supabase import Client
+
 
 class WalletAPIView(APIView, ResponseMixin):
     permission_classes = []
@@ -199,9 +201,44 @@ class ProcessTransaction(APIView, ResponseMixin):
                     )
 
 
+            if request.data.get('channel') == 'data_bundle':
+                from .data_bundle import process_data_bundle
+
+                try:
+                    result = process_data_bundle(request)
+
+                    if result.get('success'):
+                        return self.response(
+                            data=result.get('data'),
+                            status_code=status.HTTP_200_OK,
+                            message='Data purchased successfully.'
+                        )
+                    
+                    if (not result.get('success')) and (result.get('status') == 'pending'):
+                        return self.response(
+                            data=result.get('data'),
+                            status_code=status.HTTP_200_OK,
+                            message='Data purchase is pending'
+                        )
+                    
+                    else:
+                        return self.response(
+                            data=result.get('data'),
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            message='Data purchase failed, please try again.'
+                        )
+                
+                except Exception as e:
+                    print(e)
+                    self.response(
+                        error={"detail": str(e)},
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+                    )
             return self.response(
-                data={},
-                status_code=status.HTTP_200_OK,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unhandled server error occured.",
+                error={'message': 'An unhandled server error has occured.'}
             )
 
         except Exception as e:
@@ -268,3 +305,56 @@ class VerifyPinView(APIView, ResponseMixin):
             )
 
 
+class ListDataPlansView(APIView, ResponseMixin):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        """
+        GET /transactions/latest/  —  return 3 most recent transactions
+        """
+        try:
+            from utils import CASHBACK_VALUE
+
+            supabase: Client = request.supabase_client
+
+            super_plans = supabase.table('n3t')\
+                .select('*')\
+                .eq('is_active', True)\
+                .execute()
+            
+            super_plans = [{
+                **plan,
+                'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE)
+            } for plan in super_plans.data]
+            
+            best_plans = supabase.table('gsub')\
+                .select('*')\
+                .eq('is_active', True)\
+                .execute()
+            
+            best_plans = [{
+                **plan,
+                'price': plan.get('price', 0) + plan.get('commission', 0), # This has to be done for DB commissioning
+                'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE)
+            } for plan in best_plans.data]
+            
+            payload = {
+                'Super': super_plans,
+                'Best': best_plans,
+                'Regular': []
+            }
+            
+            return self.response(
+                data=payload,
+                status_code=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+            )
+        

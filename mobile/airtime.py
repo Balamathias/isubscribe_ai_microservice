@@ -180,7 +180,7 @@ def process_airtime(request: Any):
         'type': 'airtime_topup',
         'commission': commission,
         'balance_before': balance,
-        'balance_after': balance - amount
+        'balance_after': balance - amount,
     }
 
     bonus_cashback = amount * CB
@@ -197,10 +197,11 @@ def process_airtime(request: Any):
         if not response.data:
             raise Exception("Failed to insert transaction history")
 
-        payload['title'] = 'Cashback'
+        payload['title'] = 'Data Bonus'
         payload['description'] = f'You have successfully received a data bonus of {format_data_amount(bonus_cashback)}.'
         payload['amount'] = bonus_cashback
         payload['type'] = 'cashback'
+        payload['meta_data'] = { 'data_bonus': format_data_amount(bonus_cashback) }
 
         cashback_response = supabase.table('history')\
             .insert(payload)\
@@ -211,7 +212,10 @@ def process_airtime(request: Any):
         
         return {
             'success': True,
-            'data': response.data[0]
+            'data': {
+                **response.data[0],
+                'data_bonus': format_data_amount(bonus_cashback)
+            }
         }
 
     elif code == '099':
