@@ -27,6 +27,9 @@ class SupabaseJWTMiddleware(ResponseMixin):
                     settings.SUPABASE_URL,
                     settings.SUPABASE_KEY
                 )
+
+                request.token = token
+                
                 request.supabase_client.headers = {
                     "Authorization": f"Bearer {token}"
                 }

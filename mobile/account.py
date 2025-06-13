@@ -43,6 +43,9 @@ def generate_palmpay_account(request: Any):
                 json={
                     'email': user.email or '',
                     'customer_name': user.metadata.get('full_name') or '',
+                },
+                headers={
+                    'Authorization': f'Bearer {request.token}'
                 }
             )
 

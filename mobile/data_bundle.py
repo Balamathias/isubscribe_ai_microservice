@@ -197,18 +197,17 @@ def process_data_bundle(request: Any):
             return {'error': 'Invalid amount'}
             
         return_cashback = (amount * CASHBACK_VALUE)
-        
-        # if method == 'wallet' and balance < amount:
-        #     return {'error': 'Insufficient wallet balance'}
-        # if method == 'cashback' and cashback_balance < amount:
-        #     return {'error': 'Insufficient cashback balance'}
             
         try:
-            supabase.rpc('charge_wallet', {
+            supabase.rpc('update_wallet_balance', {
                 'user_id': str(request.user.id),
                 'amount': -float(amount) if refund else float(amount),
-                'cashback': -return_cashback if refund else return_cashback,
                 'charge_from': method
+            }).execute()
+            
+            supabase.rpc('update_cashback_balance', {
+                'user_id': str(request.user.id),
+                'cashback': -return_cashback if refund else return_cashback
             }).execute()
                 
         except Exception as e:
