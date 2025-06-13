@@ -201,7 +201,11 @@ def process_airtime(request: Any):
         payload['description'] = f'You have successfully received a data bonus of {format_data_amount(bonus_cashback)}.'
         payload['amount'] = bonus_cashback
         payload['type'] = 'cashback'
-        payload['meta_data'] = { 'data_bonus': format_data_amount(bonus_cashback) }
+        payload['meta_data'] = { 
+            'data_bonus': format_data_amount(bonus_cashback),
+            'phone': phone,
+            'network': network
+        }
 
         cashback_response = supabase.table('history')\
             .insert(payload)\

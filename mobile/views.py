@@ -6,6 +6,7 @@ from utils import format_data_amount
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from auth.supabase import SupabaseAuthentication
+from .account import generate_palmpay_account
 
 from supabase import Client
 
@@ -24,6 +25,14 @@ class WalletAPIView(APIView, ResponseMixin):
                     error="Authentication required",
                     status_code=status.HTTP_401_UNAUTHORIZED
                 )
+            
+            try:
+                palm_req = generate_palmpay_account(request)
+                print("*" * 13, '\n')
+                print(palm_req)
+                print("*" * 13, '\n')
+            except:
+                pass
 
             supabase = request.supabase_client
 
@@ -61,11 +70,13 @@ class TransactionHistoryView(APIView, ResponseMixin):
     
     permission_classes = []
 
-    def get(self, request):
+    def get(self, request, transaction_id=None):
         """
         GET /transactions/  —  return paginated transaction history
-        Query params:
-            - limit: number of records to return (default: 10)
+        GET /transactions/<id>/  —  return specific transaction details
+        
+        Query params (for list view):
+            - limit: number of records to return (default: 30)
             - offset: number of records to skip (default: 0)
         """
         try:
@@ -76,10 +87,31 @@ class TransactionHistoryView(APIView, ResponseMixin):
                     status_code=status.HTTP_401_UNAUTHORIZED
                 )
 
+            supabase = request.supabase_client
+
+            if transaction_id:
+                response = supabase.table('history')\
+                    .select('*')\
+                    .eq('id', int(transaction_id))\
+                    .eq('user', user.id)\
+                    .single()\
+                    .execute()
+
+                if not response.data:
+                    return self.response(
+                        error={"detail": "Transaction not found"},
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        message="Transaction could not be found."
+                    )
+
+                return self.response(
+                    data=response.data,
+                    status_code=status.HTTP_200_OK,
+                    message="Transaction retrieved successfully."
+                )
+
             limit = int(request.query_params.get('limit', 30))
             offset = int(request.query_params.get('offset', 0))
-
-            supabase = request.supabase_client
 
             count_response = supabase.table('history').select('*', count='exact').eq('user', user.id).execute()
             total_count = count_response.count
@@ -92,12 +124,10 @@ class TransactionHistoryView(APIView, ResponseMixin):
                 .execute()
 
             return self.response(
-                data={
-                    'transactions': response.data,
-                    'total': total_count,
-                    'limit': limit,
-                    'offset': offset
-                },
+                data=response.data,
+                count=total_count,
+                next=offset + limit if offset + limit < total_count else None,
+                previous=offset - limit if offset > 0 else None,
                 status_code=status.HTTP_200_OK,
             )
 
@@ -150,7 +180,6 @@ class LatestTransactionsView(APIView, ResponseMixin):
 
 @method_decorator(csrf_exempt, name="dispatch")
 class ProcessTransaction(APIView, ResponseMixin):
-    authentication_classes = [SupabaseAuthentication]
     permission_classes = []
 
     def post(self, request):
@@ -252,7 +281,6 @@ class ProcessTransaction(APIView, ResponseMixin):
 
 @method_decorator(csrf_exempt, name="dispatch")
 class VerifyPinView(APIView, ResponseMixin):
-    authentication_classes = [SupabaseAuthentication]
     permission_classes = []
     
     def post(self, request):

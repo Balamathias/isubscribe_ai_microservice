@@ -309,7 +309,12 @@ def process_data_bundle(request: Any):
             payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
             payload['amount'] = return_cashback
             payload['type'] = 'cashback'
-            payload['meta_data'] = {**data_plan}
+            payload['meta_data'] = {
+                    **data_plan,
+                    'data_bonus': format_data_amount(return_cashback),
+                    'phone': phone,
+                    'network': data_plan.get('network')
+                }
 
             cashback_response = supabase.table('history')\
                 .insert(payload)\
@@ -432,7 +437,12 @@ def process_data_bundle(request: Any):
                 payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
                 payload['amount'] = return_cashback
                 payload['type'] = 'cashback'
-                payload['meta_data'] = {**data_plan, 'data_bonus': format_data_amount(return_cashback)}
+                payload['meta_data'] = {
+                    **data_plan,
+                    'data_bonus': format_data_amount(return_cashback),
+                    'phone': phone,
+                    'network': data_plan.get('network')
+                }
 
                 cashback_response = supabase.table('history')\
                     .insert(payload)\
@@ -542,7 +552,14 @@ def process_data_bundle(request: Any):
             payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
             payload['amount'] = return_cashback
             payload['type'] = 'cashback'
-            payload['meta_data'] = { **data_plan, 'data_bonus': format_data_amount(return_cashback) }
+            payload['transaction_id'] = content.get('transactions', {}).get('transactionId', '')
+            payload['commission'] = commission + data_plan.get('commission', 0)
+            payload['meta_data'] = {
+                    **data_plan,
+                    'data_bonus': format_data_amount(return_cashback),
+                    'phone': phone,
+                    'network': data_plan.get('network')
+                }
 
             cashback_response = supabase.table('history')\
                 .insert(payload)\
@@ -556,7 +573,7 @@ def process_data_bundle(request: Any):
                 'data': {
                     **data_plan,
                     **history_response.data[0],
-                    'data_bonus': format_data_amount(return_cashback)
+                    'data_bonus': format_data_amount(return_cashback),
                 }
             }
 
