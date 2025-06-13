@@ -413,3 +413,44 @@ class ListDataPlansView(APIView, ResponseMixin):
                 message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
             )
         
+
+@method_decorator(csrf_exempt, name="dispatch")
+class VerifyPhoneNumberView(APIView, ResponseMixin):
+    permission_classes = []
+
+    def post(self, request):
+        """
+        POST /verify-phone/  —  verify a phone number and return network carrier
+        """
+        try:
+            phone = request.data.get('phone')
+            if not phone:
+                return self.response(
+                    error={"detail": "Phone number is required"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Please provide a phone number"
+                )
+
+            from utils import verify_number
+            network = verify_number(phone)
+
+            if not network:
+                return self.response(
+                    error={"detail": "Could not verify phone number"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Unable to verify phone number. Please check and try again."
+                )
+
+            return self.response(
+                data={"network": network},
+                status_code=status.HTTP_200_OK,
+                message="Phone number verified successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred"
+            )

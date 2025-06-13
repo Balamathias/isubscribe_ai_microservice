@@ -49,7 +49,7 @@ def buy_airtime(
     }
 
     try:
-        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers)
+        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=30)
         print("AIRTSTATS:", res.reason, res.status_code)
 
         if res.status_code != 200:
@@ -67,7 +67,7 @@ def buy_airtime(
 
 def process_airtime(request: Any):
 
-    CB = 0.01
+    from utils import CASHBACK_VALUE
 
     supabase: Client = request.supabase_client
 
@@ -88,9 +88,9 @@ def process_airtime(request: Any):
 
     request_id = generate(size=24)
 
-    payment_method = request.data.get('payment_method', 'wallet')
+    payment_method: str = request.data.get('payment_method', 'wallet')
 
-    if payment_method not in ['wallet', 'cashback']:
+    if payment_method.lower() not in ['wallet', 'cashback']:
         raise Exception('Unknown payment method selected.')
 
     cashback_balance = 0
@@ -109,42 +109,31 @@ def process_airtime(request: Any):
         print("SUP Wal EXC", e)
         raise Exception(f"Failed to fetch wallet: {str(e)}")
 
-    def charge_wallet(method: str = 'wallet'):
-        return_cashback = (amount * CB)
-        if method == 'wallet':
-            if balance < amount:
-                return {
-                    'error': 'Insufficient wallet balance'
-                }
+    def charge_wallet(method: str = 'wallet', refund: bool = False):
+        return_cashback = (amount * CASHBACK_VALUE)
+        balance_to_check = balance if method == 'wallet' else cashback_balance
+        balance_type = 'wallet' if method == 'wallet' else 'cashback'
+        
+        if not refund and balance_to_check < amount:
+            return {
+                'error': f'Insufficient {balance_type} balance'
+            }
+        
+        try:
+            supabase.rpc('charge_wallet', {
+                'user_id': str(request.user.id),
+                'amount': -float(amount) if refund else float(amount),
+                'cashback': -return_cashback if refund else return_cashback,
+                'charge_from': method,
+            }).execute()
             
-            try:
-                response = supabase.rpc('charge_wallet', {
-                    'user_id': str(request.user.id),
-                    'amount': float(amount),
-                    'cashback': return_cashback,
-                    'charge_from': method
-                }).execute()
+            if method == 'wallet':
                 print(f"RPC Result: ", response)
-
-            except Exception as e:
+                            
+        except Exception as e:
+            if method == 'wallet':
                 print("RPC Error: ", e)
-                return { 'error': str(e) }
-
-        if method == 'cashback':
-            if cashback_balance < amount:
-                return {
-                    'error': 'Insufficient cashback balance'
-                }
-            
-            try:
-                supabase.rpc('charge_wallet', {
-                    'user_id': str(request.user.id),
-                    'amount': float(amount),
-                    'cashback': return_cashback,
-                    'charge_from': method
-                }).execute()
-            except Exception as e:
-                return { 'error': str(e) }
+            return { 'error': str(e) }
     
     if payment_method == 'wallet' and balance < amount:
         raise ValueError(f"Insufficient wallet balance. Required: {amount}, Available: {balance}")
@@ -163,6 +152,7 @@ def process_airtime(request: Any):
         raise Exception('No response was received from the server')
 
     code = response.get('code')
+
     if not code:
         raise Exception('Invalid response format: missing code')
 
@@ -183,18 +173,19 @@ def process_airtime(request: Any):
         'balance_after': balance - amount,
     }
 
-    bonus_cashback = amount * CB
+    bonus_cashback = amount * CASHBACK_VALUE
 
     if code == '000':
+
         cw = charge_wallet(payment_method)
         if cw and cw.get('error'):
             raise Exception(cw.get('error'))
 
-        response = supabase.table('history')\
+        history_response = supabase.table('history')\
             .insert(payload)\
             .execute()
         
-        if not response.data:
+        if not history_response.data:
             raise Exception("Failed to insert transaction history")
 
         payload['title'] = 'Data Bonus'
@@ -217,40 +208,45 @@ def process_airtime(request: Any):
         return {
             'success': True,
             'data': {
-                **response.data[0],
+                **history_response.data[0],
                 'data_bonus': format_data_amount(bonus_cashback)
             }
         }
 
     elif code == '099':
+        cw = charge_wallet(payment_method)
+        if cw and cw.get('error'):
+            raise Exception(cw.get('error'))
+        
         payload['status'] = 'pending'
         payload['description'] = 'Transaction Pending.'
 
-        response = supabase.table('history')\
+        history_response = supabase.table('history')\
             .insert(payload)\
             .execute()
         
-        if not response.data:
+        if not history_response.data:
             raise Exception("Failed to insert pending transaction history")
         
         return {
             'success': False,
-            'data': response.data[0]
+            'data': history_response.data[0]
         }
+    
     else:
         payload['status'] = 'failed'
         payload['description'] = RESPONSE_CODES.get(code, {}).get('message', 'Unknown error')
         payload['balance_before'] = balance
         payload['balance_after'] = balance
 
-        response = supabase.table('history')\
+        history_response = supabase.table('history')\
             .insert(payload)\
             .execute()
         
-        if not response.data:
+        if not history_response.data:
             raise Exception("Failed to insert failed transaction history")
         
         return {
             'success': False,
-            'data': response.data[0]
+            'data': history_response.data[0]
         }

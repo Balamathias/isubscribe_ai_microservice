@@ -48,7 +48,7 @@ def get_regular_bundle(
     }
 
     try:
-        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers)
+        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=30)
         print("DATABSTATS:", res.reason, res.status_code)
 
         if res.status_code != 200:
@@ -87,7 +87,7 @@ def get_super_bundle(payload: SuperPayload) -> Union[ResponseData, None]:
         req_body['request-id'] = payload['request_id']
         req_body['network'] = mapped[payload.get('network')]
 
-        res = requests.post(f"{N3T_BASE_URL}/data", json=req_body, headers=headers)
+        res = requests.post(f"{N3T_BASE_URL}/data", json=req_body, headers=headers, timeout=30)
         res.raise_for_status()
         
         data = res.json()
@@ -124,7 +124,8 @@ def get_best_bundle(payload: GsubPayload) -> Union[GsubResponse, None]:
         res = requests.post(
             'https://api.gsubz.com/api/pay/',
             headers=headers,
-            data=url_params
+            data=url_params,
+            timeout=30
         )
         res.raise_for_status()
         
@@ -172,9 +173,9 @@ def process_data_bundle(request: Any):
     if not category:
         raise ValueError("Data category is required")
 
-    payment_method = request.data.get('payment_method', 'wallet')
+    payment_method: str = request.data.get('payment_method', 'wallet')
 
-    if payment_method not in ['wallet', 'cashback']:
+    if payment_method.lower() not in ['wallet', 'cashback']:
         raise Exception('Unknown payment method selected.')
 
     cashback_balance = 0
@@ -577,6 +578,10 @@ def process_data_bundle(request: Any):
             }
 
         elif code == '099':
+            cw = charge_wallet(amount=amount, method=payment_method)
+            if cw and cw.get('error'):
+                raise Exception(cw.get('error'))
+            
             payload['status'] = 'pending'
             payload['description'] = 'Transaction Pending.'
 
