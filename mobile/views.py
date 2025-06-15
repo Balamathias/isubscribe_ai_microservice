@@ -297,7 +297,7 @@ class VerifyPinView(APIView, ResponseMixin):
             )
         
         try:
-            if action == 'new':
+            if action in ['new', 'reset']:
                 hashed_pin = hash_pin(pin)
                 
                 response = request.supabase_client.table('profile')\
