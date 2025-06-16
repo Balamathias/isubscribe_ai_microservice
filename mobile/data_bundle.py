@@ -196,6 +196,9 @@ def process_data_bundle(request: Any):
     def charge_wallet(method: str = 'wallet', amount: int = 0, refund: bool = False):
         if not isinstance(amount, (int, float)) or amount <= 0:
             return {'error': 'Invalid amount'}
+
+        if method == 'cashback' and amount > 1000:
+            raise ValueError(f'You cannot purchase a plan above N 1,000 with Data Bonus at a time.')
             
         return_cashback = (amount * CASHBACK_VALUE)
             
