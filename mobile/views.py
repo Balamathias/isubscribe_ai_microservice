@@ -423,7 +423,7 @@ class VerifyPhoneNumberView(APIView, ResponseMixin):
         POST /verify-phone/  —  verify a phone number and return network carrier
         """
         try:
-            phone = request.data.get('phone')
+            phone: str | None = request.data.get('phone')
             if not phone:
                 return self.response(
                     error={"detail": "Phone number is required"},

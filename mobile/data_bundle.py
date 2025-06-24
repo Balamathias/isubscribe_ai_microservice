@@ -253,8 +253,8 @@ def process_data_bundle(request: Any):
         
         response = get_best_bundle({
             'phone': phone,
-            'serviceID': data_plan.get('service_id'),
-            'plan': data_plan.get('value'),
+            'serviceID': data_plan.get('service_id', ''),
+            'plan': data_plan.get('value', ''),
             'requestID': generate(size=24),
         })
 
@@ -273,7 +273,7 @@ def process_data_bundle(request: Any):
 
             payload['amount'] = amount
             payload['description'] = GSUB_RESPONSE_CODES.get(str(response.get('code', None)), {}).get('message', f'Data subscription for {phone} failed.')
-            payload['balance_after'] = balance
+            payload['balance_after'] = balance if payment_method == 'wallet' else None
             payload['status'] = 'failed'
 
             history_response = supabase.table('history')\
@@ -295,7 +295,7 @@ def process_data_bundle(request: Any):
         if response.get('code') == 200:
             payload['amount'] = amount
             payload['description'] = f'You have successfully topped up {data_plan.get('quantity')} for {phone}.'
-            payload['balance_after'] = balance - amount
+            payload['balance_after'] = (balance - amount) if payment_method == 'wallet' else None
             payload['transaction_id'] = response.get('transactionID', None)
             payload['commission'] = data_plan.get('commission')
 
@@ -361,7 +361,7 @@ def process_data_bundle(request: Any):
         else:
             payload['amount'] = amount
             payload['description'] = f'Data plan {data_plan.get('quantity')} pending for {phone}.'
-            payload['balance_after'] = balance - amount
+            payload['balance_after'] = (balance - amount) if payment_method == 'wallet' else None
             payload['status'] = 'pending'
 
             history_response = supabase.table('history')\
@@ -418,7 +418,7 @@ def process_data_bundle(request: Any):
 
             payload['amount'] = amount
             payload['description'] = f'You have successfully topped up {data_plan.get('quantity')} for {phone}.'
-            payload['balance_after'] = balance - amount
+            payload['balance_after'] = (balance - amount) if payment_method == 'wallet' else None
             payload['transaction_id'] = response.get('request-id', None)
             payload['commission'] = data_plan.get('commission')
 
@@ -534,7 +534,7 @@ def process_data_bundle(request: Any):
             'type': 'data_topup',
             'commission': commission,
             'balance_before': balance,
-            'balance_after': balance - amount,
+            'balance_after': (balance - amount) if payment_method == 'wallet' else None,
         }
 
         return_cashback = amount * CASHBACK_VALUE
@@ -607,7 +607,7 @@ def process_data_bundle(request: Any):
             payload['status'] = 'failed'
             payload['description'] = RESPONSE_CODES.get(code, {}).get('message', 'Unknown error')
             payload['balance_before'] = balance
-            payload['balance_after'] = balance
+            payload['balance_after'] = balance if payment_method == 'wallet' else None
 
             history_response = supabase.table('history')\
                 .insert(payload)\
