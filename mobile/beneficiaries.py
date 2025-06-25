@@ -116,7 +116,7 @@ def get_saved_beneficiaries(request, limit: int = 5) -> Optional[List[Dict[str, 
             print(f"Cache retrieval error: {e}")
 
         response = supabase.table('beneficiaries')\
-            .select('phone, network, frequency, last_used')\
+            .select('phone, network, frequency, last_used, id')\
             .eq('user', user.id)\
             .order('frequency', desc=True)\
             .order('last_used', desc=True)\
