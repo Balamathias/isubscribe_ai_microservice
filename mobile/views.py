@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from mobile.beneficiaries import save_beneficiary
 from utils.response import ResponseMixin
 from rest_framework import status
 from utils import format_data_amount
@@ -207,7 +208,9 @@ class ProcessTransaction(APIView, ResponseMixin):
                             message='Airtime purchased successfully.'
                         )
                     
-                    if (not result.get('success')) and (result.get('data').get('status') == 'pending'):
+                    save_beneficiary(request)
+
+                    if (not result.get('success')) and (result.get('data', {}).get('status') == 'pending'):
                         return self.response(
                             data=result.get('data'),
                             status_code=status.HTTP_200_OK,
@@ -242,6 +245,8 @@ class ProcessTransaction(APIView, ResponseMixin):
                             status_code=status.HTTP_200_OK,
                             message='Data purchased successfully.'
                         )
+                    
+                    save_beneficiary(request)
                     
                     if (not result.get('success')) and (result.get('status') == 'pending'):
                         return self.response(
@@ -445,6 +450,52 @@ class VerifyPhoneNumberView(APIView, ResponseMixin):
                 data={"network": network},
                 status_code=status.HTTP_200_OK,
                 message="Phone number verified successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred"
+            )
+
+
+class BeneficiariesView(APIView, ResponseMixin):
+    permission_classes = []
+
+    def get(self, request):
+        """
+        GET /beneficiaries/  —  return saved beneficiaries for the current user
+        
+        Query params:
+            - limit: number of records to return (default: 5)
+        """
+        from .beneficiaries import get_saved_beneficiaries
+
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            limit = int(request.query_params.get('limit', 5))
+            
+            beneficiaries = get_saved_beneficiaries(request, limit=limit)
+
+            if beneficiaries is None:
+                return self.response(
+                    error={"detail": "Failed to retrieve beneficiaries"},
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    message="An error occurred while retrieving beneficiaries"
+                )
+
+            return self.response(
+                data=beneficiaries,
+                status_code=status.HTTP_200_OK,
+                message="Beneficiaries retrieved successfully"
             )
 
         except Exception as e:

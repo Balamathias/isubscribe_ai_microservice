@@ -8,7 +8,8 @@ from .views import (
     ProcessTransaction, 
     VerifyPinView, 
     ListDataPlansView,
-    VerifyPhoneNumberView
+    VerifyPhoneNumberView,
+    BeneficiariesView,
 )
 
 urlpatterns = [
@@ -20,4 +21,5 @@ urlpatterns = [
     path("verify-pin/", VerifyPinView.as_view(), name="verify-pin"),
     path("list-plans/", ListDataPlansView.as_view(), name="list-plans"),
     path("verify-phone/", VerifyPhoneNumberView.as_view(), name="verify-phone"),
+    path("beneficiaries/", BeneficiariesView.as_view(), name="beneficiaries"),
 ]
