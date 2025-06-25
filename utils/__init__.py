@@ -61,8 +61,6 @@ class PhoneNumberInfo:
     carrier: str
 
 
-
-
 def verify_number(phone: str) -> Optional[Networks]:
     """
     Verify phone number and return network carrier.

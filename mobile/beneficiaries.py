@@ -108,7 +108,6 @@ def get_saved_beneficiaries(request, limit: int = 5) -> Optional[List[Dict[str, 
         supabase = request.supabase_client
         cache_key = f'beneficiaries:{user.id}'
 
-        # Try to get from cache first
         try:
             cached_data = redis.get(cache_key)
             if cached_data:
@@ -116,7 +115,6 @@ def get_saved_beneficiaries(request, limit: int = 5) -> Optional[List[Dict[str, 
         except Exception as e:
             print(f"Cache retrieval error: {e}")
 
-        # Get from database
         response = supabase.table('beneficiaries')\
             .select('phone, network, frequency, last_used')\
             .eq('user', user.id)\
@@ -130,7 +128,6 @@ def get_saved_beneficiaries(request, limit: int = 5) -> Optional[List[Dict[str, 
 
         beneficiaries = response.data
 
-        # Cache the result
         try:
             redis.set(cache_key, json.dumps(beneficiaries), ex=30)
         except Exception as e:
