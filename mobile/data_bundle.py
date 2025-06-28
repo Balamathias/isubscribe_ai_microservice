@@ -241,7 +241,7 @@ def process_data_bundle(request: Any):
             .select('*')\
             .eq('id', plan_id).single().execute()).data
         
-        amount = data_plan.get('price', 0) + data_plan.get('commsission', 0)
+        amount = data_plan.get('price', 0) + data_plan.get('commission', 0)
 
         cw = charge_wallet(
             payment_method,
