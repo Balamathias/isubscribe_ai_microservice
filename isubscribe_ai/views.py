@@ -230,6 +230,7 @@ from django.utils.decorators import method_decorator
 @method_decorator(csrf_exempt, name="dispatch")
 class CreateVirtualAccountAPIView(APIView, ResponseMixin):
     permission_classes = []
+    authentication_classes = []
 
     def post(self, request):
         try:
