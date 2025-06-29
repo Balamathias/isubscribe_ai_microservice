@@ -10,6 +10,7 @@ from .views import (
     ListDataPlansView,
     VerifyPhoneNumberView,
     BeneficiariesView,
+    ListElectricityView,
 )
 
 urlpatterns = [
@@ -22,4 +23,5 @@ urlpatterns = [
     path("list-plans/", ListDataPlansView.as_view(), name="list-plans"),
     path("verify-phone/", VerifyPhoneNumberView.as_view(), name="verify-phone"),
     path("beneficiaries/", BeneficiariesView.as_view(), name="beneficiaries"),
+    path("list-electricity/", ListElectricityView.as_view(), name="list-electricity"),
 ]

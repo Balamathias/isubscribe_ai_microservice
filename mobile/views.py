@@ -269,6 +269,45 @@ class ProcessTransaction(APIView, ResponseMixin):
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
                     )
+            
+            
+            if request.data.get('channel') == 'electricity':
+                from .electricity import process_electricity
+
+                try:
+                    result = process_electricity(request)
+
+                    if result.get('success'):
+                        return self.response(
+                            data=result.get('data'),
+                            status_code=status.HTTP_200_OK,
+                            message='Electricity bill paid successfully.'
+                        )
+                    
+                    save_beneficiary(request)
+                    
+                    if (not result.get('success')) and (result.get('status') == 'pending'):
+                        return self.response(
+                            data=result.get('data'),
+                            status_code=status.HTTP_200_OK,
+                            message='Electricity payment is pending'
+                        )
+                    
+                    else:
+                        return self.response(
+                            data=result.get('data'),
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            message='Electricity payment failed, please try again.'
+                        )
+                
+                except Exception as e:
+                    print(e)
+                    return self.response(
+                        error={"detail": str(e)},
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+                    )
+            
             return self.response(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="An unhandled server error occured.",
@@ -360,7 +399,7 @@ class ListDataPlansView(APIView, ResponseMixin):
 
     def get(self, request):
         """
-        GET /transactions/latest/  —  return 3 most recent transactions
+        GET /list-plans/  —  return 3 most recent transactions
         """
         try:
             from utils import CASHBACK_VALUE
@@ -505,3 +544,33 @@ class BeneficiariesView(APIView, ResponseMixin):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="An unknown error occurred"
             )
+
+
+class ListElectricityView(APIView, ResponseMixin):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        """
+        GET /list-electricity/
+        """
+        try:
+            supabase: Client = request.supabase_client
+
+            services = supabase.table('electricity')\
+                .select('*')\
+                .execute()
+            
+            return self.response(
+                data=services.data,
+                status_code=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+            )
+        
