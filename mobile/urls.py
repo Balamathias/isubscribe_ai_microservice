@@ -12,6 +12,7 @@ from .views import (
     BeneficiariesView,
     ListElectricityView,
     ListTVCableView,
+    AppConfig
 )
 
 urlpatterns = [
@@ -26,4 +27,5 @@ urlpatterns = [
     path("beneficiaries/", BeneficiariesView.as_view(), name="beneficiaries"),
     path("list-electricity/", ListElectricityView.as_view(), name="list-electricity"),
     path("list-tv/", ListTVCableView.as_view(), name="list-tv"),
+    path("app-config/", AppConfig.as_view(), name="app-config"),
 ]

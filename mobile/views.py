@@ -611,3 +611,54 @@ class ListTVCableView(APIView, ResponseMixin):
             )
         
 
+class AppConfig(APIView, ResponseMixin):
+    permission_classes = []
+    authentication_classes = []
+
+
+    def get(self, request):
+
+        import datetime
+
+        """
+        GET /app-config/
+        """
+        try:
+            supabase: Client = request.supabase_client
+
+            services = supabase.table('app_config')\
+                .select('*')\
+                .execute()
+
+            jamb_price_row = next((item for item in services.data if item.get('name') == 'jamb_price'), None)
+            waec_price_row = next((item for item in services.data if item.get('name') == 'waec_price'), None)
+
+            jamb_price = float(jamb_price_row.get('value', 0)) if jamb_price_row else 0.0
+            waec_price = float(waec_price_row.get('value', 0)) if waec_price_row else 0.0
+            
+            current_date = datetime.datetime.now()
+            year = current_date.year % 100
+            month = current_date.month
+            app_version = f"{year}.{month}"
+
+            payload = {
+                'app_name': 'isubscribe',
+                'app_version': app_version,
+                'support_email': 'support@isubscribe.com',
+                'support_phone': '+2347049597498',
+                'jamb_price': jamb_price,
+                'waec_price': waec_price,
+            }
+
+            return self.response(
+                data=payload,
+                status_code=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+            )
