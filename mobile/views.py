@@ -574,3 +574,40 @@ class ListElectricityView(APIView, ResponseMixin):
                 message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
             )
         
+
+class ListTVCableView(APIView, ResponseMixin):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        """
+        GET /list-tv/
+        """
+        try:
+            supabase: Client = request.supabase_client
+
+            services = supabase.table('tv')\
+                .select('*')\
+                .execute()
+            
+            grouped_services = {}
+            for service in services.data:
+                provider = service.get('provider', '').lower()
+                if provider not in grouped_services:
+                    grouped_services[provider] = []
+                grouped_services[provider].append(service)
+            
+            return self.response(
+                data=grouped_services,
+                status_code=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+            )
+        
+
