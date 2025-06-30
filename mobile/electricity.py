@@ -74,7 +74,7 @@ def process_electricity(request: Any):
     Process electricity bill payment.
     This function handles the payment for electricity bills, including validation,
     wallet charging, and transaction history logging. Required parameters include
-    ID, meter number, variation code, phone number, and amount.
+    service_id, meter number, variation code, phone number, and amount.
 
     Args:
         request (Any): The request object containing user data and payment details.
@@ -86,9 +86,9 @@ def process_electricity(request: Any):
 
     supabase: Client = request.supabase_client
 
-    id = request.data.get('id')
-    if not id:
-        raise ValueError("ID is required")
+    service_id = request.data.get('service_id')
+    if not service_id:
+        raise ValueError("Service ID is required")
 
     billers_code = request.data.get('billers_code')
     if not billers_code:
@@ -173,7 +173,7 @@ def process_electricity(request: Any):
     
     electricity_services = supabase.table('electricity')\
         .select('*')\
-        .eq('id', id)\
+        .eq('service_id', service_id)\
         .single()\
         .execute()
 
