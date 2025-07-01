@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
 from mobile.beneficiaries import save_beneficiary
+from mobile.electricity import verify_merchant
 from utils.response import ResponseMixin
 from rest_framework import status
 from utils import format_data_amount
@@ -661,4 +662,74 @@ class AppConfig(APIView, ResponseMixin):
                 error={"detail": str(e)},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+            )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class VerifyMerchantView(APIView, ResponseMixin):
+    permission_classes = []
+
+    def post(self, request):
+        """
+        POST /verify-merchant/  —  verify merchant details for electricity services
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            type_param = request.data.get('type')
+            service_id = request.data.get('serviceID')
+            billers_code = request.data.get('billersCode')
+
+            if not all([type_param, service_id, billers_code]):
+                return self.response(
+                    error={"detail": "Type, Service ID, and Billers code are required"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Please provide all required fields: type, service ID, and billers code"
+                )
+
+
+            result = verify_merchant(
+                type=type_param,
+                serviceID=service_id,
+                billersCode=billers_code
+            )
+
+            if not result:
+                return self.response(
+                    error={"detail": "Failed to verify merchant"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Unable to verify merchant details. Please try again."
+                )
+            
+            if result.get('code') != '000':
+                return self.response(
+                    error={"detail": result.get('message', 'Unknown error')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Merchant verification failed: " + result.get('message', 'Unknown error')
+                )
+
+            if result.get('content', {}).get('error'):
+                return self.response(
+                    error={"detail": result.get('content', {}).get('error')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message=f"Merchant verification failed: {result.get('content', {}).get('error')}"
+                )
+
+            return self.response(
+                data=result.get('content', {}),
+                status_code=status.HTTP_200_OK,
+                message="Merchant verified successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred"
             )

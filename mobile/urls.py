@@ -12,7 +12,8 @@ from .views import (
     BeneficiariesView,
     ListElectricityView,
     ListTVCableView,
-    AppConfig
+    AppConfig,
+    VerifyMerchantView,
 )
 
 urlpatterns = [
@@ -28,4 +29,5 @@ urlpatterns = [
     path("list-electricity/", ListElectricityView.as_view(), name="list-electricity"),
     path("list-tv/", ListTVCableView.as_view(), name="list-tv"),
     path("app-config/", AppConfig.as_view(), name="app-config"),
+    path("verify-merchant/", VerifyMerchantView.as_view(), name="verify-merchant"),
 ]

@@ -89,3 +89,25 @@ class VTPassTransactionResponse(TypedDict):
     Token: NotRequired[str]
     MainToken: NotRequired[str]
     mainToken: NotRequired[str]
+
+
+class VTPassCommissionDetails(TypedDict):
+    amount: Optional[str]
+    rate: str
+    rate_type: str
+    computation_type: str
+
+class VTPassMerchantVerifyContent(TypedDict):
+    Customer_Name: str
+    Address: str
+    MeterNumber: str
+    Min_Purchase_Amount: int
+    Outstanding: int
+    Customer_Arrears: Optional[str]
+    Meter_Type: str
+    WrongBillersCode: bool
+    commission_details: VTPassCommissionDetails
+
+class MerchantVerifyResponse(TypedDict):
+    code: str
+    content: VTPassMerchantVerifyContent

@@ -26,7 +26,11 @@ RESPONSE_CODES = {
     '099': {
         'message': 'This transaction is pending.',
         'title': 'TRANSACTION_PENDING'
-    }
+    },
+    '013': {
+        'message': 'The amount entered is below the minimum allowed. Please enter a higher amount.',
+        'title': 'BELOW_MINIMUM_AMOUNT_ALLOWED'
+    },
 }
 
 

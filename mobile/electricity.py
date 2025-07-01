@@ -9,7 +9,8 @@ from utils import format_data_amount
 from utils import CASHBACK_VALUE
 
 from pytypes.vtpass import (
-    VTPassTransactionResponse
+    VTPassTransactionResponse,
+    MerchantVerifyResponse
 )
 
 load_dotenv()
@@ -27,6 +28,44 @@ class BuyElectricityParams(TypedDict, total=False):
     amount: float
     phone: Union[int, str]
 
+
+def verify_merchant(
+    type: str,
+    serviceID: str,
+    billersCode: str,
+) -> Optional[MerchantVerifyResponse]:
+    
+    payload = {
+        "serviceID": serviceID,
+        "billersCode": billersCode,
+        "type": type,
+    }
+
+    headers = {
+        "api-key": VTPASS_API_KEY,
+        "secret-key": VTPASS_SECRET_KEY,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        res = requests.post(f"{VTPASS_BASE_URL}/merchant-verify", json=payload, headers=headers, timeout=50)
+        print("ELECTRICITY:", res.reason, res.status_code)
+
+        if res.status_code != 200:
+            raise RuntimeError(f"Failed to verify merchant: {res.text}")
+
+        response_data = res.json()
+
+        print("Verify Merchant Response:", response_data)
+
+        if not response_data:
+            raise RuntimeError("Empty response from server")
+            
+        return response_data
+    except Exception as err:
+        print("Verify merchant error:", err)
+        return None
+    
 
 def buy_electricity(
     request_id: str,
@@ -53,13 +92,16 @@ def buy_electricity(
     }
 
     try:
-        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=30)
+        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=58)
         print("ELECTRICITY:", res.reason, res.status_code)
 
         if res.status_code != 200:
             raise RuntimeError(f"Failed to buy electricity: {res.text}")
 
         response_data = res.json()
+
+        print("Buy Electricity Response:", response_data)
+
         if not response_data:
             raise RuntimeError("Empty response from server")
             
@@ -226,6 +268,11 @@ def process_electricity(request: Any):
     if code == '000':
 
         token = response.get('token') or response.get('MainToken') or response.get('mainToken') or response.get('Token', '')
+
+        if token and ':' in token:
+            token = ''.join(filter(str.isdigit, token.split(':')[-1].strip()))
+        elif token:
+            token = ''.join(filter(str.isdigit, token))
 
         cw = charge_wallet(payment_method, amount=amount)
         if cw and cw.get('error'):
