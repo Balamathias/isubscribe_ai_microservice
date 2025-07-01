@@ -271,7 +271,9 @@ def process_electricity(request: Any):
             'success': True,
             'data': {
                 **history_response.data[0],
-                'cashback_bonus': bonus_cashback
+                'cashback_bonus': bonus_cashback,
+                'token': token,
+                'formatted_token': format_token(token)
             }
         }
 
