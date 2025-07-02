@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 redis = upstash_redis.Redis(
-    url=os.getenv("UPSTASH_REDIS_REST_URL"),
-    token=os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    url=os.getenv("UPSTASH_REDIS_REST_URL") or '',
+    token=os.getenv("UPSTASH_REDIS_REST_TOKEN") or ''
 )
 
 
@@ -21,12 +21,12 @@ CASHBACK_VALUE = 0.01
 API_KEY = os.getenv('VERIPHONE_API_KEY')
 VERIPHONE_URL = 'https://api.veriphone.io/v2/verify'
 
-def format_data_amount(amount: float) -> str:
+def format_data_amount(amount: float | int) -> str:
     """
     Format data amount in MB or GB based on the size.
     
     Args:
-        amount (float): Amount in MB
+        amount (float | int): Amount in MB
         
     Returns:
         str: Formatted string with appropriate unit

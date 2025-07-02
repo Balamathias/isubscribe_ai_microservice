@@ -1,4 +1,5 @@
 import os
+from pyparsing import C
 import requests
 from typing import Any, Optional, TypedDict, Literal, Union
 from dotenv import load_dotenv
@@ -159,6 +160,10 @@ def process_electricity(request: Any):
         raise ValueError("Amount is required")
     if amount < 100:
         raise ValueError(f'Electricity amount below {amount:.2f} not allowed.')
+    
+    COMMISSION = 0.1  # 10% commission
+
+    amount = (amount * COMMISSION) + amount ### Add 10% commission to original amount.
 
     request_id = generate(size=24)
 
@@ -253,7 +258,7 @@ def process_electricity(request: Any):
         'amount': amount,
         'provider': 'vtpass',
         'type': 'meter_topup',
-        'commission': commission,
+        'commission': (commission + (amount * COMMISSION)),
         'balance_before': balance,
         'balance_after': balance - amount,
     }
