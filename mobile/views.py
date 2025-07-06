@@ -733,3 +733,97 @@ class VerifyMerchantView(APIView, ResponseMixin):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="An unknown error occurred"
             )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class RatingsView(APIView, ResponseMixin):
+    permission_classes = []
+
+    def post(self, request):
+        """
+        POST /ratings/  —  submit a user rating
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            rating = request.data.get('rating')
+            comment = request.data.get('comment')
+
+            if not rating:
+                return self.response(
+                    error={"detail": "Rating is required"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Please provide a rating"
+                )
+
+            if not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
+                return self.response(
+                    error={"detail": "Rating must be between 1 and 5"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Rating must be a number between 1 and 5"
+                )
+
+            supabase = request.supabase_client
+
+            data = {
+                'user_id': user.id,
+                'rating': rating,
+                'comment': comment,
+                'status': 'active'
+            }
+
+            response = supabase.table('ratings').insert(data).execute()
+
+            if not response.data:
+                return self.response(
+                    error={"detail": "Failed to submit rating"},
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    message="Failed to submit rating"
+                )
+
+            return self.response(
+                data=response.data[0],
+                status_code=status.HTTP_201_CREATED,
+                message="Rating submitted successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred"
+            )
+
+    def get(self, request):
+        """
+        GET /ratings/  —  get top 15 active published ratings
+        """
+        try:
+            supabase = request.supabase_client
+
+            response = supabase.table('ratings')\
+                .select('*')\
+                .eq('status', 'active')\
+                .order('created_at', desc=True)\
+                .limit(15)\
+                .execute()
+
+            return self.response(
+                data=response.data,
+                status_code=status.HTTP_200_OK,
+                message="Ratings retrieved successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred"
+            )
