@@ -809,7 +809,7 @@ class RatingsView(APIView, ResponseMixin):
 
             response = supabase.table('ratings')\
                 .select('*')\
-                .eq('status', 'active')\
+                .eq('status', 'published')\
                 .order('created_at', desc=True)\
                 .limit(15)\
                 .execute()
