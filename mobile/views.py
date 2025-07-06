@@ -802,16 +802,23 @@ class RatingsView(APIView, ResponseMixin):
 
     def get(self, request):
         """
-        GET /ratings/  —  get top 15 active published ratings
+        GET /ratings/  —  get paginated active published ratings
+        
+        Query params:
+            - limit: number of records to return (default: 20)
+            - offset: number of records to skip (default: 0)
         """
         try:
             supabase = request.supabase_client
+
+            limit = int(request.query_params.get('limit', 20))
+            offset = int(request.query_params.get('offset', 0))
 
             response = supabase.table('ratings')\
                 .select('*')\
                 .eq('status', 'published')\
                 .order('created_at', desc=True)\
-                .limit(15)\
+                .range(offset, offset + limit - 1)\
                 .execute()
 
             return self.response(
