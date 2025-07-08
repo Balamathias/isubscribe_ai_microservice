@@ -834,3 +834,74 @@ class RatingsView(APIView, ResponseMixin):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="An unknown error occurred"
             )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class DeleteAccountView(APIView, ResponseMixin):
+    permission_classes = []
+
+    def delete(self, request):
+        """
+        DELETE /delete-account/  —  delete the current user's account
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            supabase = request.supabase_client
+
+            try:
+                profile_response = supabase.table('profile')\
+                    .select('id')\
+                    .eq('id', user.id)\
+                    .single()\
+                    .execute()
+                
+                if not profile_response.data:
+                    return self.response(
+                        error={"detail": "Account not found or access denied"},
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        message="You can only delete your own account"
+                    )
+            except Exception:
+                return self.response(
+                    error={"detail": "Account verification failed"},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    message="Unable to verify account ownership"
+                )
+
+            tables_to_clean = ['wallet', 'history', 'beneficiaries', 'profile', 'ratings']
+            
+            for table in tables_to_clean:
+                try:
+                    supabase.table(table).delete().eq('user_id' if table == 'ratings' else 'user', user.id).execute()
+                except:
+                    pass
+
+            try:
+                supabase.auth.admin.delete_user(user.id)
+            except Exception as e:
+                print(f"Failed to delete user from auth: {e}")
+                return self.response(
+                    error={"detail": "Failed to delete account"},
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    message="Failed to delete account"
+                )
+
+            return self.response(
+                data={"deleted": True},
+                status_code=status.HTTP_200_OK,
+                message="Account deleted successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred"
+            )
