@@ -883,7 +883,8 @@ class DeleteAccountView(APIView, ResponseMixin):
                     pass
 
             try:
-                supabase.auth.admin.delete_user(user.id)
+                from services.supabase import superbase
+                superbase.auth.admin.delete_user(user.id)
             except Exception as e:
                 print(f"Failed to delete user from auth: {e}")
                 return self.response(
