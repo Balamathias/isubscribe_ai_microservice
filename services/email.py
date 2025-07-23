@@ -51,7 +51,7 @@ def send_otp_email(email: str, otp: str, full_name: str) -> Dict[str, Any]:
         </body>
         </html>
         ;//
-        """.replace("//js", "").replace("//;", "")
+        """.replace("//js", "").replace(";//", "")
         
         plain_message = f"""
         Hello {full_name},
