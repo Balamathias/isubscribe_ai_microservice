@@ -20,7 +20,7 @@ def send_otp_email(email: str, otp: str, full_name: str) -> Dict[str, Any]:
         Dict with success status and optional error message
     """
     try:
-        subject = "Your PIN Reset Code - iSubscribe"
+        subject = "Your PIN Reset Code - isubscribe"
         
         html_message = f"""//js
         <html>
