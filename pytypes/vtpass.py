@@ -76,6 +76,10 @@ class VTPassAirtimeTransactionResponse(TypedDict):
 class VTPassTransactionResponseContent(TypedDict):
     transactions: Transaction
 
+class VTPassCard(TypedDict):
+    Serial: str
+    Pin: str
+
 class VTPassTransactionResponse(TypedDict):
     code: str
     content: VTPassTransactionResponseContent
@@ -89,6 +93,11 @@ class VTPassTransactionResponse(TypedDict):
     Token: NotRequired[str]
     MainToken: NotRequired[str]
     mainToken: NotRequired[str]
+
+    Pin: NotRequired[str]
+
+    tokens: NotRequired[List[str]]
+    cards: NotRequired[List[VTPassCard]]
 
 
 class VTPassCommissionDetails(TypedDict):

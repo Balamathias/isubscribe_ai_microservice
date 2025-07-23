@@ -229,6 +229,7 @@ def process_data_bundle(request: Any):
         'commission': 0,
         'balance_before': balance,
         'balance_after': 0,
+        'source': request.data.get('source', 'mobile'),
     }
 
     if category == 'best':

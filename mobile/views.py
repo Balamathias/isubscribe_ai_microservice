@@ -1,9 +1,11 @@
 from rest_framework.views import APIView
 from mobile.beneficiaries import save_beneficiary
-from mobile.electricity import verify_merchant
+from mobile.electricity import verify_merchant, process_electricity
+from mobile.education import verify_education_merchant, process_education
 from utils.response import ResponseMixin
 from rest_framework import status
 from utils import format_data_amount
+import datetime
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -189,6 +191,11 @@ class ProcessTransaction(APIView, ResponseMixin):
         POST /process-transactions/  —  process a new transaction
         """
         try:
+            request.data['source'] = request.data.get('source', 'mobile')
+        except:
+            pass
+
+        try:
             user = request.user
             if not user:
                 return self.response(
@@ -307,6 +314,47 @@ class ProcessTransaction(APIView, ResponseMixin):
                         error={"detail": str(e)},
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
+                    )
+
+            if request.data.get('channel') == 'education':
+                try:
+
+                    result = process_education(request)
+
+                    if result.get('success'):
+                        return self.response(
+                            data=result.get('data'),
+                            status_code=status.HTTP_200_OK,
+                            message="Education service purchased successfully"
+                        )
+                    else:
+                        status_text = result.get('status', 'failed')
+                        if status_text == 'pending':
+                            return self.response(
+                                data=result.get('data'),
+                                status_code=status.HTTP_202_ACCEPTED,
+                                message="Education service purchase is pending"
+                            )
+                        else:
+                            return self.response(
+                                data=result.get('data'),
+                                error={"detail": "Transaction failed"},
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                message="Education service purchase failed"
+                            )
+
+                except ValueError as e:
+                    return self.response(
+                        error={"detail": str(e)},
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        message=str(e)
+                    )
+                except Exception as e:
+                    print(e)
+                    return self.response(
+                        error={"detail": str(e)},
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        message="An unknown error occurred"
                     )
             
             return self.response(
@@ -732,6 +780,125 @@ class VerifyMerchantView(APIView, ResponseMixin):
                 error={"detail": str(e)},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="An unknown error occurred"
+            )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class VerifyEducationMerchantView(APIView, ResponseMixin):
+    permission_classes = []
+
+    def post(self, request):
+        """
+        POST /verify-education-merchant/  —  verify education merchant details (JAMB Profile ID)
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            service_id = request.data.get('serviceID')
+            billers_code = request.data.get('billersCode') or request.data.get('profile_id')
+            variation_code = request.data.get('variation_code')
+
+            if not all([service_id, billers_code, variation_code]):
+                return self.response(
+                    error={"detail": "Service ID, Profile ID, and variation code are required"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Please provide all required fields: serviceID, profile_id (billersCode), and variation_code"
+                )
+
+            # Only JAMB and DE require verification
+            if service_id not in ['jamb', 'de']:
+                return self.response(
+                    error={"detail": "Verification only required for JAMB and Direct Entry services"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="This service does not require merchant verification"
+                )
+
+            result = verify_education_merchant(
+                serviceID=service_id,
+                billersCode=billers_code,
+                variation_code=variation_code
+            )
+
+            if not result:
+                return self.response(
+                    error={"detail": "Failed to verify education merchant"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Unable to verify Profile ID. Please check and try again."
+                )
+            
+            if result.get('code') != '000':
+                return self.response(
+                    error={"detail": result.get('message', 'Unknown error')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Profile ID verification failed: " + result.get('message', 'Unknown error')
+                )
+
+            return self.response(
+                data=result.get('content', {}),
+                status_code=status.HTTP_200_OK,
+                message="Profile ID verified successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred"
+            )
+
+
+class ListEducationServicesView(APIView, ResponseMixin):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        """
+        GET /list-education/  —  return available education services
+        """
+        try:
+            supabase: Client = request.supabase_client
+
+            services = supabase.table('education')\
+                .select('*')\
+                .eq('is_active', True)\
+                .execute()
+            
+            # Group services by type
+            grouped_services = {}
+            for service in services.data:
+                service_type = service.get('service_type', 'other')
+                if service_type not in grouped_services:
+                    grouped_services[service_type] = []
+                
+                # Calculate total price including commission
+                base_price = float(service.get('price', 0))
+                commission_rate = float(service.get('commission_rate', 0.1))
+                total_price = base_price * (1 + commission_rate)
+                
+                service_info = {
+                    **service,
+                    'total_price': total_price,
+                    'display_price': f"₦{total_price:.2f}"
+                }
+                grouped_services[service_type].append(service_info)
+            
+            return self.response(
+                data=grouped_services,
+                status_code=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=str(e) if hasattr(e, '__str__') else "An unknown error occurred"
             )
 
 

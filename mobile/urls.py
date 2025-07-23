@@ -14,6 +14,8 @@ from .views import (
     ListTVCableView,
     AppConfig,
     VerifyMerchantView,
+    VerifyEducationMerchantView,
+    ListEducationServicesView,
     RatingsView,
     DeleteAccountView,
 )
@@ -32,6 +34,8 @@ urlpatterns = [
     path("list-tv/", ListTVCableView.as_view(), name="list-tv"),
     path("app-config/", AppConfig.as_view(), name="app-config"),
     path("verify-merchant/", VerifyMerchantView.as_view(), name="verify-merchant"),
+    path("verify-education-merchant/", VerifyEducationMerchantView.as_view(), name="verify-education-merchant"),
+    path("list-education/", ListEducationServicesView.as_view(), name="list-education"),
     path("ratings/", RatingsView.as_view(), name="ratings"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
 ]

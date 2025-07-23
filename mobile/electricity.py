@@ -261,6 +261,7 @@ def process_electricity(request: Any):
         'commission': (commission + (amount * COMMISSION)),
         'balance_before': balance,
         'balance_after': balance - amount,
+        'source': request.data.get('source', 'mobile'),
     }
 
     bonus_cashback = amount * CASHBACK_VALUE
@@ -272,7 +273,7 @@ def process_electricity(request: Any):
 
     if code == '000':
 
-        token = response.get('token') or response.get('MainToken') or response.get('mainToken') or response.get('Token', '')
+        token = response.get('token') or response.get('MainToken') or response.get('mainToken') or response.get('Token', '') or response.get('purchased_code', '')
 
         if token and ':' in token:
             token = ''.join(filter(str.isdigit, token.split(':')[-1].strip()))

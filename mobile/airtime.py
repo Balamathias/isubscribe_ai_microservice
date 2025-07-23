@@ -171,6 +171,7 @@ def process_airtime(request: Any):
         'commission': commission,
         'balance_before': balance,
         'balance_after': balance - amount,
+        'source': request.data.get('source', 'mobile'),
     }
 
     bonus_cashback = amount * CASHBACK_VALUE
