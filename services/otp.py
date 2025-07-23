@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 class OTPService:
     @staticmethod
     def generate_otp() -> str:
-        """Generate a 5-digit OTP"""
-        return str(random.randint(10000, 99999))
+        """Generate a 6-digit OTP"""
+        return str(random.randint(100000, 999999))
     
     @staticmethod
     def get_valid_otp_for_user(user_id: str) -> Optional[Dict[str, Any]]:
