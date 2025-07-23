@@ -425,7 +425,7 @@ class PINResetView(APIView, ResponseMixin):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
-            if not new_pin.isdigit() or len(new_pin) != 4:
+            if not isinstance(new_pin, str) or not new_pin.isdigit() or len(new_pin) != 4:
                 return self.response(
                     error={"detail": "PIN must be 4 digits"},
                     status_code=status.HTTP_400_BAD_REQUEST
