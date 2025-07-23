@@ -1,4 +1,5 @@
 import os
+import logging
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -22,7 +23,11 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from services.whatsapp import whatsapp_client
 from services.palmpay import PalmPayService, PalmPayCreateAccountRequest
+from services.otp import OTPService
+from services.pin import PINService
+from services.email import send_otp_email
 
+logger = logging.Logger(__name__)
 
 class WalletViewSet(viewsets.ViewSet, ResponseMixin):
     permission_classes = [IsAuthenticated]
@@ -288,3 +293,168 @@ class CreateVirtualAccountAPIView(APIView, ResponseMixin):
 
 def health_check(request):
     return JsonResponse({"status": "ok"})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PINResetRequestView(APIView, ResponseMixin):
+    """Request OTP for PIN reset"""
+    permission_classes = []
+    
+    def post(self, request):
+        """Send OTP email for PIN reset"""
+        try:
+            user = request.user
+            
+            if not user or not hasattr(user, 'id'):
+                return self.response(
+                    error={"detail": "You must be signed in to request a PIN reset"},
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            valid_otp = OTPService.get_valid_otp_for_user(user.id)
+            
+            if not valid_otp:
+                otp_data, error = OTPService.create_otp_request(user.id)
+                
+                if error:
+                    return self.response(
+                        error={"detail": f"Error creating OTP: {str(error)}"},
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                
+                valid_otp = otp_data
+            
+            if not valid_otp:
+                return self.response(
+                    error={"detail": "Failed to create or retrieve OTP"},
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            email_result = send_otp_email(
+                user.email,
+                valid_otp['otp'],
+                getattr(user, 'full_name', user.email)
+            )
+            
+            if email_result.get('error'):
+                return self.response(
+                    error=email_result['error'],
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            return self.response(
+                {"message": "OTP sent successfully to your email"},
+                status_code=status.HTTP_200_OK,
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in PIN reset request: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PINResetVerifyOTPView(APIView, ResponseMixin):
+    """Verify OTP for PIN reset"""
+    permission_classes = []
+    
+    def post(self, request):
+        """Verify OTP code"""
+        try:
+            user = request.user
+            otp = request.data.get('otp')
+            
+            if not user or not hasattr(user, 'id'):
+                return self.response(
+                    error={"detail": "You must be signed in to verify OTP"},
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            if not otp:
+                return self.response(
+                    error={"detail": "OTP is required"},
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            is_valid = OTPService.verify_otp(user.id, otp)
+            
+            if not is_valid:
+                return self.response(
+                    error={"detail": "Invalid or expired OTP"},
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            return self.response(
+                {"message": "OTP verified successfully", "verified": True},
+                status_code=status.HTTP_200_OK,
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error verifying OTP: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PINResetView(APIView, ResponseMixin):
+    """Reset user PIN after OTP verification"""
+    permission_classes = []
+    
+    def post(self, request):
+        """Reset PIN with new PIN and OTP verification"""
+        try:
+            user = request.user
+            new_pin = request.data.get('new_pin')
+            otp = request.data.get('otp')
+
+            requires_otp: bool = request.data.get('requires_otp', True)
+            
+            if not user or not hasattr(user, 'id'):
+                return self.response(
+                    error={"detail": "You must be signed in to reset PIN"},
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            if not new_pin or (requires_otp and not otp):
+                return self.response(
+                    error={"detail": "Both new_pin and otp are required"},
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not new_pin.isdigit() or len(new_pin) != 4:
+                return self.response(
+                    error={"detail": "PIN must be 4 digits"},
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            is_valid_otp = OTPService.verify_otp(user.id, otp)
+            
+            if not is_valid_otp and requires_otp:
+                return self.response(
+                    error={"detail": "Invalid or expired OTP"},
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            success, error = PINService.update_pin(user.id, new_pin)
+            
+            if not success:
+                return self.response(
+                    error={"detail": f"Error resetting PIN: {str(error)}"},
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            return self.response(
+                {"message": "PIN reset successfully"},
+                status_code=status.HTTP_200_OK,
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error resetting PIN: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

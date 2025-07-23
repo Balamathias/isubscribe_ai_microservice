@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-import dj_database_url
 
 load_dotenv()
 
@@ -65,7 +64,6 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
 
     'isubscribe_ai',
-    'mobile',
 ]
 
 MIDDLEWARE = [
@@ -117,8 +115,6 @@ DATABASES = {
     }
 }
 
-# DATABASES['default'] = dj_database_url.config(default=os.getenv('DATABASE_URL'))
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -156,13 +152,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_build', 'static')
-
-MEDIA_URLS ='/media/'
-
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -186,3 +176,15 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
+
+EMAIL_BACKEND = 'email_backends.resend.ResendEmailBackend'
+
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@updates.isubscribe.ng')
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
