@@ -410,7 +410,6 @@ class PINResetView(APIView, ResponseMixin):
             user = request.user
             new_pin = request.data.get('new_pin')
             otp = request.data.get('otp')
-
             requires_otp: bool = request.data.get('requires_otp', True)
             
             if not user or not hasattr(user, 'id'):
@@ -421,7 +420,7 @@ class PINResetView(APIView, ResponseMixin):
             
             if not new_pin or (requires_otp and not otp):
                 return self.response(
-                    error={"detail": "Both new_pin and otp are required"},
+                    error={"detail": "new_pin is required" + (" and otp is required" if requires_otp else "")},
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -431,13 +430,20 @@ class PINResetView(APIView, ResponseMixin):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
-            is_valid_otp = OTPService.verify_otp(user.id, otp)
-            
-            if not is_valid_otp and requires_otp:
-                return self.response(
-                    error={"detail": "Invalid or expired OTP"},
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
+            if requires_otp:
+                if not otp:
+                    return self.response(
+                        error={"detail": "OTP is required when requires_otp is True"},
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                is_valid_otp = OTPService.verify_otp(user.id, otp)
+                
+                if not is_valid_otp:
+                    return self.response(
+                        error={"detail": "Invalid or expired OTP"},
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
             
             success, error = PINService.update_pin(user.id, new_pin)
             
