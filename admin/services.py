@@ -120,7 +120,13 @@ class UserAnalyticsService:
                 'end_date': end_date.isoformat()
             }).execute()
             
-            # Most active users
+            # High frequency users (potential suspicious activity)
+            high_freq_response = supabase.rpc('get_high_frequency_users', {
+                'time_window': '1 hour',
+                'min_transactions': 10
+            }).execute()
+            
+            # Most active users from recent transactions
             active_users_response = supabase.table('history').select('user, email').gte(
                 'created_at', start_date.isoformat()
             ).execute()
@@ -135,7 +141,9 @@ class UserAnalyticsService:
             frequency_analysis = UserAnalyticsService._analyze_transaction_frequency(start_date, end_date)
             
             return {
-                "repeat_customers": len(repeat_customers_response.data) if repeat_customers_response.data else 0,
+                "repeat_customers": repeat_customers_response.data if repeat_customers_response.data else [],
+                "repeat_customers_count": len(repeat_customers_response.data) if repeat_customers_response.data else 0,
+                "high_frequency_users": high_freq_response.data if high_freq_response.data else [],
                 "top_active_users": top_users,
                 "frequency_analysis": frequency_analysis,
                 "period_days": days
@@ -222,7 +230,7 @@ class FinancialAnalyticsService:
             df['commission'] = pd.to_numeric(df['commission'], errors='coerce').fillna(0)
             
             # Filter successful transactions for revenue calculations
-            successful_transactions = df[df['status'] == 'successful']
+            successful_transactions = df[df['status'] == 'success']
             
             # Basic metrics
             total_revenue = successful_transactions['commission'].sum()
@@ -363,7 +371,7 @@ class TransactionAnalyticsService:
             # Status distribution
             status_counts = df['status'].value_counts().to_dict()
             total_transactions = len(df)
-            successful = status_counts.get('successful', 0)
+            successful = status_counts.get('success', 0)
             failed = status_counts.get('failed', 0)
             pending = status_counts.get('pending', 0)
             
@@ -410,13 +418,13 @@ class TransactionAnalyticsService:
                 return {}
             
             provider_stats = df.groupby('provider').agg({
-                'status': ['count', lambda x: (x == 'successful').sum(), lambda x: (x == 'failed').sum()],
+                'status': ['count', lambda x: (x == 'success').sum(), lambda x: (x == 'failed').sum()],
                 'amount': 'sum',
                 'commission': 'sum'
             }).round(2)
             
-            provider_stats.columns = ['total_transactions', 'successful', 'failed', 'total_volume', 'total_commission']
-            provider_stats['success_rate'] = (provider_stats['successful'] / provider_stats['total_transactions'] * 100).round(2)
+            provider_stats.columns = ['total_transactions', 'success', 'failed', 'total_volume', 'total_commission']
+            provider_stats['success_rate'] = (provider_stats['success'] / provider_stats['total_transactions'] * 100).round(2)
             
             return provider_stats.to_dict('index')
             
@@ -532,7 +540,7 @@ class ServiceAnalyticsService:
             # Get data transactions
             data_transactions = supabase.table('history').select(
                 'amount, commission, provider, status'
-            ).eq('type', 'data_bundle').gte(
+            ).eq('type', 'data_topup').gte(
                 'created_at', start_date.isoformat()
             ).lte('created_at', end_date.isoformat()).execute()
             
@@ -543,7 +551,7 @@ class ServiceAnalyticsService:
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0)
             df['commission'] = pd.to_numeric(df['commission'], errors='coerce').fillna(0)
             
-            successful_df = df[df['status'] == 'successful']
+            successful_df = df[df['status'] == 'success']
             
             # Provider breakdown
             provider_stats = successful_df.groupby('provider').agg({
@@ -571,7 +579,7 @@ class ServiceAnalyticsService:
         try:
             airtime_transactions = supabase.table('history').select(
                 'amount, commission, provider, status'
-            ).eq('type', 'airtime').gte(
+            ).eq('type', 'airtime_topup').gte(
                 'created_at', start_date.isoformat()
             ).lte('created_at', end_date.isoformat()).execute()
             
@@ -582,7 +590,7 @@ class ServiceAnalyticsService:
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0)
             df['commission'] = pd.to_numeric(df['commission'], errors='coerce').fillna(0)
             
-            successful_df = df[df['status'] == 'successful']
+            successful_df = df[df['status'] == 'success']
             
             return {
                 "total_transactions": len(df),
@@ -613,7 +621,7 @@ class ServiceAnalyticsService:
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0)
             df['commission'] = pd.to_numeric(df['commission'], errors='coerce').fillna(0)
             
-            successful_df = df[df['status'] == 'successful']
+            successful_df = df[df['status'] == 'success']
             
             # Breakdown by bill type
             type_breakdown = successful_df.groupby('type').agg({
@@ -652,7 +660,7 @@ class ServiceAnalyticsService:
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0)
             df['commission'] = pd.to_numeric(df['commission'], errors='coerce').fillna(0)
             
-            successful_df = df[df['status'] == 'successful']
+            successful_df = df[df['status'] == 'success']
             
             return {
                 "total_transactions": len(df),
@@ -758,13 +766,13 @@ class SystemHealthService:
             end_date = datetime.now()
             start_date = end_date - timedelta(hours=1)
             
-            service_types = ['data_bundle', 'airtime', 'electricity', 'tv', 'education']
+            service_types = ['data_topup', 'airtime_topup', 'electricity_topup', 'tv_topup', 'education_topup']
             service_health = {}
             
             for service_type in service_types:
                 recent_success = supabase.table('history').select('id').eq(
                     'type', service_type
-                ).eq('status', 'successful').gte(
+                ).eq('status', 'success').gte(
                     'created_at', start_date.isoformat()
                 ).limit(1).execute()
                 
