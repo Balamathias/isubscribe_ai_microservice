@@ -52,7 +52,7 @@ CORS_ALLOWED_ORIGINS = [
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    # 'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -64,6 +64,8 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
 
     'isubscribe_ai',
+    'mobile',
+    'admin',  # Custom admin app for managing users and reports
 ]
 
 MIDDLEWARE = [

@@ -467,12 +467,13 @@ def process_data_bundle(request: Any):
         
         
         if response.get('status') in ['fail', 'failed', 'error']:
-            import re
-
             response_message = response.get('message')
 
             payload['amount'] = amount
-            payload['description'] = f'Data subscription of {data_plan.get('quantity')} failed for {phone}.' if re.match('Insufficient') else response_message
+            if response_message and 'Insufficient' in response_message:
+                payload['description'] = f'Data subscription of {data_plan.get("quantity")} failed for {phone}.'
+            else:
+                payload['description'] = response_message or f'Data subscription failed for {phone}.'
             payload['balance_after'] = balance
             payload['status'] = 'failed'
 
