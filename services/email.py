@@ -24,31 +24,31 @@ def send_otp_email(email: str, otp: str, full_name: str) -> Dict[str, Any]:
         
         html_message = f"""//js
         <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px;">
-                <h2 style="color: #333; text-align: center; margin-bottom: 30px;">PIN Reset Request</h2>
-                
-                <p style="color: #666; font-size: 16px;">Hello {full_name},</p>
-                
-                <p style="color: #666; font-size: 16px;">
-                    You have requested to reset your transaction PIN. Please use the code below to complete the process:
-                </p>
-                
-                <div style="background-color: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-                    <h1 style="color: #007bff; font-size: 32px; letter-spacing: 5px; margin: 0;">{otp}</h1>
-                </div>
-                
-                <p style="color: #666; font-size: 14px;">
-                    This code will expire in 10 minutes. If you didn't request this PIN reset, please ignore this email.
-                </p>
-                
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        This is an automated message from isubscribe. Please do not reply to this email.
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px;">
+                    <h2 style="color: #333; text-align: center; margin-bottom: 30px;">PIN Reset Request</h2>
+                    
+                    <p style="color: #666; font-size: 16px;">Hello {full_name},</p>
+                    
+                    <p style="color: #666; font-size: 16px;">
+                        You have requested to reset your transaction PIN. Please use the code below to complete the process:
                     </p>
+                    
+                    <div style="background-color: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                        <h1 style="color: #007bff; font-size: 32px; letter-spacing: 5px; margin: 0;">{otp}</h1>
+                    </div>
+                    
+                    <p style="color: #666; font-size: 14px;">
+                        This code will expire in 10 minutes. If you didn't request this PIN reset, please ignore this email.
+                    </p>
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                        <p style="color: #999; font-size: 12px; text-align: center;">
+                            This is an automated message from isubscribe. Please do not reply to this email.
+                        </p>
+                    </div>
                 </div>
-            </div>
-        </body>
+            </body>
         </html>
         ;//
         """.replace("//js", "").replace(";//", "")
