@@ -65,7 +65,7 @@ INSTALLED_APPS = [
 
     'isubscribe_ai',
     'mobile',
-    'admin',  # Custom admin app for managing users and reports
+    # 'admin',  # Custom admin app for managing users and reports
 ]
 
 MIDDLEWARE = [
