@@ -133,13 +133,19 @@ def process_airtime(request: Any):
         except Exception as e:
             if method == 'wallet':
                 print("RPC Error: ", e)
-            return { 'error': str(e) }
+            message = e.args[0].get('message', str(e)) if isinstance(e.args[0], dict) and 'message' in e.args[0] else str(e)
+            return {'error': message}
     
     if payment_method == 'wallet' and balance < amount:
         raise ValueError(f"Insufficient wallet balance. Required: {amount}, Available: {balance}")
     
     if payment_method == 'cashback' and cashback_balance < amount:
         raise ValueError(f"Insufficient cashback balance. Required: {amount}, Available: {cashback_balance}")
+
+    cw = charge_wallet(payment_method)
+
+    if cw and cw.get('error'):
+        raise Exception(cw.get('error'))
             
     response = buy_airtime(
         request_id=request_id,
@@ -178,10 +184,6 @@ def process_airtime(request: Any):
 
     if code == '000':
 
-        cw = charge_wallet(payment_method)
-        if cw and cw.get('error'):
-            raise Exception(cw.get('error'))
-
         history_response = supabase.table('history')\
             .insert(payload)\
             .execute()
@@ -215,9 +217,6 @@ def process_airtime(request: Any):
         }
 
     elif code == '099':
-        cw = charge_wallet(payment_method)
-        if cw and cw.get('error'):
-            raise Exception(cw.get('error'))
         
         payload['status'] = 'pending'
         payload['description'] = 'Transaction Pending.'
@@ -235,6 +234,10 @@ def process_airtime(request: Any):
         }
     
     else:
+        cw = charge_wallet(payment_method, refund=True)
+        if cw and cw.get('error'):
+            raise Exception(cw.get('error'))
+        
         payload['status'] = 'failed'
         payload['description'] = RESPONSE_CODES.get(code, {}).get('message', 'Unknown error')
         payload['balance_before'] = balance

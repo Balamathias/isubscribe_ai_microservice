@@ -216,7 +216,8 @@ def process_data_bundle(request: Any):
                 
         except Exception as e:
             print("RPC Error: ", e)
-            return {'error': str(e)}
+            message = e.args[0].get('message', str(e)) if isinstance(e.args[0], dict) and 'message' in e.args[0] else str(e)
+            return {'error': message}
         
     payload = {
         'title': 'Data Subscription',
@@ -396,6 +397,18 @@ def process_data_bundle(request: Any):
         amount = data_plan.get('price', 0) ## Here be dragons, the price of this one has commission added to it from the database already.
         print("Amount: ", amount)
 
+        if amount > balance and payment_method == 'wallet':
+            raise ValueError('Insufficient wallet balance for the selected data plan.')
+        if amount > cashback_balance and payment_method == 'cashback':
+            raise ValueError('Insufficient cashback balance for the selected data plan.')
+        
+        cw = charge_wallet(
+                payment_method,
+                amount=amount,
+            )
+
+        if cw and cw.get('error'):
+            raise Exception(cw.get('error'))
         
         response = get_super_bundle({
             'bypass': False,
@@ -409,13 +422,6 @@ def process_data_bundle(request: Any):
             raise RuntimeError('Server failed to return a response.')
 
         if response and response.get('status') in ['success', 'pending']:
-            cw = charge_wallet(
-                payment_method,
-                amount=amount,
-            )
-
-            if cw and cw.get('error'):
-                raise Exception(cw.get('error'))
 
             payload['amount'] = amount
             payload['description'] = f'You have successfully topped up {data_plan.get('quantity')} for {phone}.'
@@ -469,6 +475,15 @@ def process_data_bundle(request: Any):
         if response.get('status') in ['fail', 'failed', 'error']:
             response_message = response.get('message')
 
+            cw = charge_wallet(
+                payment_method,
+                amount=amount,
+                refund=True
+            )
+
+            if cw and cw.get('error'):
+                raise RuntimeError(cw.get('error'))
+
             payload['amount'] = amount
             if response_message and 'Insufficient' in response_message:
                 payload['description'] = f'Data subscription of {data_plan.get("quantity")} failed for {phone}.'
@@ -508,6 +523,11 @@ def process_data_bundle(request: Any):
         
         amount = data_plan.get('price', 0) + data_plan.get('commission', 0)
 
+        cw = charge_wallet(amount=amount, method=payment_method)
+
+        if cw and cw.get('error'):
+            raise Exception(cw.get('error'))
+
         response = get_regular_bundle(
             phone=phone,
             serviceID=data_plan.get('service_id'),
@@ -542,9 +562,6 @@ def process_data_bundle(request: Any):
         return_cashback = amount * CASHBACK_VALUE
 
         if code == '000':
-            cw = charge_wallet(amount=amount, method=payment_method)
-            if cw and cw.get('error'):
-                raise Exception(cw.get('error'))
 
             history_response = supabase.table('history')\
                 .insert(payload)\
@@ -583,9 +600,6 @@ def process_data_bundle(request: Any):
             }
 
         elif code == '099':
-            cw = charge_wallet(amount=amount, method=payment_method)
-            if cw and cw.get('error'):
-                raise Exception(cw.get('error'))
             
             payload['status'] = 'pending'
             payload['description'] = 'Transaction Pending.'
@@ -606,6 +620,14 @@ def process_data_bundle(request: Any):
                 'status': 'pending'
             }
         else:
+            cw = charge_wallet(
+                payment_method,
+                amount=amount,
+                refund=True
+            )
+            if cw and cw.get('error'):
+                raise Exception(cw.get('error'))
+            
             payload['status'] = 'failed'
             payload['description'] = RESPONSE_CODES.get(code, {}).get('message', 'Unknown error')
             payload['balance_before'] = balance

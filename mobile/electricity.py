@@ -229,6 +229,11 @@ def process_electricity(request: Any):
 
     service_id = electricity_services.data.get('service_id', '')
 
+    cw = charge_wallet(payment_method, amount=amount)
+
+    if cw and cw.get('error'):
+        raise Exception(cw.get('error'))
+
     response = buy_electricity(
         request_id=request_id,
         serviceID=service_id,
@@ -279,10 +284,6 @@ def process_electricity(request: Any):
             token = ''.join(filter(str.isdigit, token.split(':')[-1].strip()))
         elif token:
             token = ''.join(filter(str.isdigit, token))
-
-        cw = charge_wallet(payment_method, amount=amount)
-        if cw and cw.get('error'):
-            raise Exception(cw.get('error'))
         
         payload['meta_data'] = { 
             'cashback_bonus': bonus_cashback,
@@ -331,9 +332,6 @@ def process_electricity(request: Any):
         }
 
     elif code == '099':
-        cw = charge_wallet(payment_method, amount=amount, refund=True)
-        if cw and cw.get('error'):
-            raise Exception(cw.get('error'))
         
         payload['status'] = 'pending'
         payload['description'] = 'Transaction Pending.'
@@ -352,6 +350,15 @@ def process_electricity(request: Any):
         }
     
     else:
+        cw = charge_wallet(
+            payment_method,
+            amount=amount,
+            refund=True
+        )
+
+        if cw and cw.get('error'):
+            raise Exception(cw.get('error'))
+        
         payload['status'] = 'failed'
         payload['description'] = RESPONSE_CODES.get(code, {}).get('message', 'Unknown error')
         payload['balance_before'] = balance
