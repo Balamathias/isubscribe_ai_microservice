@@ -85,7 +85,7 @@ class AdminDashboardViewSet(ViewSet, ResponseMixin):
             
             # Recent activities (latest transactions)
             recent_activities = supabase.table('history').select(
-                'id, user, email, type, amount, status, created_at, description'
+                'id, user, email, type, amount, status, created_at, description', 'profile (username, email, full_name)'
             ).order('created_at', desc=True).limit(10).execute()
             
             dashboard_data = {
