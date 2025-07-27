@@ -120,7 +120,7 @@ def process_airtime(request: Any):
             }
         
         try:
-            supabase.rpc('charge_wallet', {
+            rpc_response = supabase.rpc('charge_wallet', {
                 'user_id': str(request.user.id),
                 'amount': -float(amount) if refund else float(amount),
                 'cashback': -return_cashback if refund else return_cashback,
@@ -128,7 +128,7 @@ def process_airtime(request: Any):
             }).execute()
             
             if method == 'wallet':
-                print(f"RPC Result: ", response)
+                print(f"RPC Result: ", rpc_response)
                             
         except Exception as e:
             if method == 'wallet':
