@@ -136,11 +136,11 @@ def process_airtime(request: Any):
             message = e.args[0].get('message', str(e)) if isinstance(e.args[0], dict) and 'message' in e.args[0] else str(e)
             return {'error': message}
     
-    # if payment_method == 'wallet' and balance < amount:
-    #     raise ValueError(f"Insufficient wallet balance. Required: {amount}, Available: {balance}")
+    if payment_method == 'wallet' and balance < amount:
+        raise ValueError(f"Insufficient wallet balance. Required: {amount}, Available: {balance}")
     
-    # if payment_method == 'cashback' and cashback_balance < amount:
-    #     raise ValueError(f"Insufficient cashback balance. Required: {amount}, Available: {cashback_balance}")
+    if payment_method == 'cashback' and cashback_balance < amount:
+        raise ValueError(f"Insufficient cashback balance. Required: {amount}, Available: {cashback_balance}")
 
     cw = charge_wallet(payment_method)
 
