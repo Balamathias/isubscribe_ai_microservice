@@ -57,7 +57,9 @@ def get_regular_bundle(
         response_data = res.json()
         if not response_data:
             raise RuntimeError("Empty response from server")
-            
+
+        print("\n\nResponse Data: ", response_data)
+
         return response_data
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(f"HTTP error occurred: {e.response.status_code} - {e.response.reason}")
