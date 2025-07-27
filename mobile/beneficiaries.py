@@ -52,7 +52,7 @@ def save_beneficiary(request) -> Dict:
         
         if existing_response.data:
             existing_beneficiary = existing_response.data[0]
-            new_frequency = existing_beneficiary.get('frequency', 0) + 1
+            new_frequency = safe_add_frequency(existing_beneficiary.get('frequency'))
             
             update_response = supabase.table('beneficiaries')\
                 .update({
@@ -128,6 +128,11 @@ def get_saved_beneficiaries(request, limit: int = 5) -> Optional[List[Dict[str, 
 
         beneficiaries = response.data
 
+        # Fix: Ensure frequency is never None in cached data
+        for beneficiary in beneficiaries:
+            if beneficiary.get('frequency') is None:
+                beneficiary['frequency'] = 0
+
         try:
             redis.set(cache_key, json.dumps(beneficiaries), ex=30)
         except Exception as e:
@@ -163,3 +168,12 @@ def process_beneficiary_from_transaction(request) -> Dict:
     except Exception as e:
         print(f"Error processing beneficiary from transaction: {e}")
         return {"error": str(e), "data": None}
+
+
+def safe_add_frequency(current_frequency, increment=1):
+    """
+    Safely add to frequency, handling None values
+    """
+    if current_frequency is None:
+        return increment
+    return current_frequency + increment
