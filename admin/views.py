@@ -59,10 +59,8 @@ class AdminDashboardViewSet(ViewSet, ResponseMixin):
     """
     Main admin dashboard providing overview metrics and quick insights
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     def list(self, request):
         """
@@ -136,10 +134,8 @@ class AdminAnalyticsViewSet(ViewSet, ResponseMixin):
     """
     Comprehensive analytics endpoints for different aspects of the platform
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     @action(detail=False, methods=['get'])
     def users(self, request):
@@ -278,10 +274,8 @@ class AdminSystemViewSet(ViewSet, ResponseMixin):
     """
     System monitoring and health check endpoints
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     @action(detail=False, methods=['get'])
     def health(self, request):
@@ -317,10 +311,8 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
     """
     User management endpoints for admin operations
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     def list(self, request):
         """

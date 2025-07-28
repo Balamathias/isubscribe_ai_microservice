@@ -3,7 +3,7 @@ from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 import logging
 
-from services.supabase import supabase
+from services.supabase import supabase, superbase
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,7 @@ class SupabaseUser:
         self.email    = user_data.get("email")
         self.phone    = user_data.get("phone")
         self.metadata = user_data.get("user_metadata") or user_data.get("metadata")
+        self.role = superbase.table('profile').select('role').eq('id', self.id).single().execute().data.get('role', 'user')
 
     @property
     def is_authenticated(self):
