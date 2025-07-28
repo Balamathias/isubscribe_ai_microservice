@@ -634,10 +634,10 @@ class AdminTransactionViewSet(ViewSet, ResponseMixin):
     """
     Advanced transaction search and management endpoints
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewFinancials]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewFinancials]
+    # authentication_classes = []
+    # permission_classes = []
     
     def list(self, request):
         """
