@@ -18,6 +18,8 @@ class SupabaseUser:
 
     @property
     def is_authenticated(self):
+        if self.role in ['suspended', 'banned']:
+            return False
         return True
     
 
