@@ -523,7 +523,7 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
                 )
             
             # Verify user exists
-            user_response = supabase.table('profile').select('id, email, full_name, pin').eq('id', pk).single().execute()
+            user_response = supabase.table('profile').select('id, email, full_name').eq('id', pk).single().execute()
             if not user_response.data:
                 return self.response(
                     error={"detail": "User not found"},
@@ -533,7 +533,7 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
             
             result = {}
 
-            saved_pin: str | None = user_response.data.get('pin')
+            saved_pin: str | None = (supabase.table('profile').select('pin').eq('id', request.user.id).single().execute()).data.get('pin')
 
             from mobile.bcrypt import verify_pin
 
