@@ -141,12 +141,31 @@ def process_airtime(request: Any):
     
     if payment_method == 'cashback' and cashback_balance < amount:
         raise ValueError(f"Insufficient cashback balance. Required: {amount}, Available: {cashback_balance}")
+    
+    payload = {
+        'title': 'Airtime Subscription',
+        'status': 'success',
+        'description': f'Airtime topped up successfully for {phone}',
+        'user': request.user.id,
+        'amount': amount,
+        'provider': 'vtpass',
+        'type': 'airtime_topup',
+        'balance_before': balance,
+        'balance_after': balance - amount,
+        'source': request.data.get('source', 'mobile'),
+    }
 
     cw = charge_wallet(payment_method)
 
     if cw and cw.get('error'):
         raise Exception(cw.get('error'))
-            
+    
+    payload['status'] = 'pending'
+
+    tx_response = supabase.table('history')\
+        .insert(payload)\
+        .execute()
+
     response = buy_airtime(
         request_id=request_id,
         amount=amount,
@@ -166,26 +185,17 @@ def process_airtime(request: Any):
     transactions = content.get('transactions', {})
     commission = transactions.get('commission', 0)
 
-    payload = {
-        'title': 'Airtime Subscription',
-        'status': 'success',
-        'description': f'Airtime topped up successfully for {phone}',
-        'user': request.user.id,
-        'amount': amount,
-        'provider': 'vtpass',
-        'type': 'airtime_topup',
-        'commission': commission,
-        'balance_before': balance,
-        'balance_after': balance - amount,
-        'source': request.data.get('source', 'mobile'),
-    }
+    payload['commission'] = commission
 
     bonus_cashback = amount * CASHBACK_VALUE
 
     if code == '000':
 
+        payload['status'] = 'success'
+
         history_response = supabase.table('history')\
-            .insert(payload)\
+            .update(payload)\
+            .eq('id', tx_response.data[0].get('id'))\
             .execute()
         
         if not history_response.data:
@@ -222,7 +232,8 @@ def process_airtime(request: Any):
         payload['description'] = 'Transaction Pending.'
 
         history_response = supabase.table('history')\
-            .insert(payload)\
+            .update(payload)\
+            .eq('id', tx_response.data[0].get('id'))\
             .execute()
         
         if not history_response.data:
@@ -244,7 +255,8 @@ def process_airtime(request: Any):
         payload['balance_after'] = balance
 
         history_response = supabase.table('history')\
-            .insert(payload)\
+            .update(payload)\
+            .eq('id', tx_response.data[0].get('id'))\
             .execute()
         
         if not history_response.data:

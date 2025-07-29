@@ -229,10 +229,29 @@ def process_electricity(request: Any):
 
     service_id = electricity_services.data.get('service_id', '')
 
+    payload = {
+        'title': 'Electricity Bill Payment',
+        'status': 'pending',
+        'description': f'Electricity bill pending for meter {billers_code}',
+        'user': request.user.id,
+        'amount': amount,
+        'provider': 'vtpass',
+        'type': 'meter_topup',
+        'balance_before': balance,
+        'balance_after': balance - amount,
+        'source': request.data.get('source', 'mobile'),
+    }
+
     cw = charge_wallet(payment_method, amount=amount)
 
     if cw and cw.get('error'):
         raise Exception(cw.get('error'))
+    
+    payload['status'] = 'pending'
+
+    tx_response = supabase.table('history')\
+        .insert(payload)\
+        .execute()
 
     response = buy_electricity(
         request_id=request_id,
@@ -255,19 +274,7 @@ def process_electricity(request: Any):
     transactions = content.get('transactions', {})
     commission = transactions.get('commission', 0)
 
-    payload = {
-        'title': 'Electricity Bill Payment',
-        'status': 'success',
-        'description': f'Electricity bill paid successfully for meter {billers_code}',
-        'user': request.user.id,
-        'amount': amount,
-        'provider': 'vtpass',
-        'type': 'meter_topup',
-        'commission': (commission + (amount * COMMISSION)),
-        'balance_before': balance,
-        'balance_after': balance - amount,
-        'source': request.data.get('source', 'mobile'),
-    }
+    payload['commission'] = (commission + (amount * COMMISSION))
 
     bonus_cashback = amount * CASHBACK_VALUE
 
@@ -277,6 +284,9 @@ def process_electricity(request: Any):
         return f"{token[:4]}-{token[4:8]}-{token[8:12]}-{token[12:16]}-{token[16:]}" if len(token) >= 20 else token
 
     if code == '000':
+
+        payload['status'] = 'success'
+        payload['description'] = 'Electricity bill paid successfully.'
 
         token = response.get('token') or response.get('MainToken') or response.get('mainToken') or response.get('Token', '') or response.get('purchased_code', '')
 
@@ -296,7 +306,8 @@ def process_electricity(request: Any):
         }
 
         history_response = supabase.table('history')\
-            .insert(payload)\
+            .update(payload)\
+            .eq('id', tx_response.data[0].get('id'))\
             .execute()
         
         if not history_response.data:
@@ -337,7 +348,8 @@ def process_electricity(request: Any):
         payload['description'] = 'Transaction Pending.'
 
         history_response = supabase.table('history')\
-            .insert(payload)\
+            .update(payload)\
+            .eq('id', tx_response.data[0].get('id'))\
             .execute()
         
         if not history_response.data:
@@ -365,7 +377,8 @@ def process_electricity(request: Any):
         payload['balance_after'] = balance
 
         history_response = supabase.table('history')\
-            .insert(payload)\
+            .update(payload)\
+            .eq('id', tx_response.data[0].get('id'))\
             .execute()
         
         if not history_response.data:

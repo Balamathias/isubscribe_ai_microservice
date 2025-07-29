@@ -255,6 +255,13 @@ def process_data_bundle(request: Any):
         if cw and cw.get('error'):
             raise Exception(cw.get('error'))
         
+        payload['amount'] = amount
+        payload['status'] = 'pending'
+        
+        tx_response = supabase.table('history')\
+                .insert(payload)\
+                .execute()
+        
         response = get_best_bundle({
             'phone': phone,
             'serviceID': data_plan.get('service_id', ''),
@@ -281,7 +288,8 @@ def process_data_bundle(request: Any):
             payload['status'] = 'failed'
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -304,7 +312,8 @@ def process_data_bundle(request: Any):
             payload['commission'] = data_plan.get('commission')
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -346,7 +355,8 @@ def process_data_bundle(request: Any):
             payload['status'] = 'reversed'
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -369,7 +379,8 @@ def process_data_bundle(request: Any):
             payload['status'] = 'pending'
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', history_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -412,6 +423,13 @@ def process_data_bundle(request: Any):
         if cw and cw.get('error'):
             raise Exception(cw.get('error'))
         
+        payload['status'] = 'pending'
+        payload['amount'] = amount
+
+        tx_response = supabase.table('history')\
+                .insert(payload)\
+                .execute()
+        
         response = get_super_bundle({
             'bypass': False,
             'request_id': f'Data_{generate(size=32)}',
@@ -435,7 +453,8 @@ def process_data_bundle(request: Any):
                 payload['description'] = f'Data plan for {phone} is pending.'
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -495,7 +514,8 @@ def process_data_bundle(request: Any):
             payload['status'] = 'failed'
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -529,6 +549,13 @@ def process_data_bundle(request: Any):
 
         if cw and cw.get('error'):
             raise Exception(cw.get('error'))
+        
+        payload['status'] = 'pending'
+        payload['amount'] = amount
+
+        tx_response = supabase.table('history')\
+                .insert(payload)\
+                .execute()
 
         response = get_regular_bundle(
             phone=phone,
@@ -566,7 +593,8 @@ def process_data_bundle(request: Any):
         if code == '000':
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -607,7 +635,8 @@ def process_data_bundle(request: Any):
             payload['description'] = 'Transaction Pending.'
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
@@ -636,7 +665,8 @@ def process_data_bundle(request: Any):
             payload['balance_after'] = balance if payment_method == 'wallet' else None
 
             history_response = supabase.table('history')\
-                .insert(payload)\
+                .update(payload)\
+                .eq('id', tx_response.data[0].get('id'))\
                 .execute()
             
             if not history_response.data:
