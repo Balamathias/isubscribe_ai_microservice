@@ -575,7 +575,6 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
                 adjust_response = supabase.rpc('modify_wallet_balance', {
                     'user_id': pk,
                     'amount': float(amount),
-                    'new_cashback_balance': 0  # Keep cashback unchanged
                 }).execute()
                 
                 result = {"message": f"Balance adjusted by {amount}", "new_balance": amount}
