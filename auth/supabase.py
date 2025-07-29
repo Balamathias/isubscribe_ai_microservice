@@ -35,6 +35,11 @@ class SupabaseAuthentication(BaseAuthentication):
         if not user_data:
             raise AuthenticationFailed("Invalid or expired Supabase token")
 
+        user = SupabaseUser(user_data)
+
+        if user.role in ['suspended', 'banned']:
+            raise AuthenticationFailed("User account is suspended or banned")
+
         return SupabaseUser(user_data), None
 
     def authenticate_header(self, request):
