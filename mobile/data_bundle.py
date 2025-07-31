@@ -257,6 +257,7 @@ def process_data_bundle(request: Any):
         
         payload['amount'] = amount
         payload['status'] = 'pending'
+        payload['description'] = f'Data subscription for {phone} is pending.'
         
         tx_response = supabase.table('history')\
                 .insert(payload)\
@@ -305,6 +306,8 @@ def process_data_bundle(request: Any):
             }
         
         if response.get('code') == 200:
+
+            payload['status'] = 'success'
             payload['amount'] = amount
             payload['description'] = f'You have successfully topped up {data_plan.get('quantity')} for {phone}.'
             payload['balance_after'] = (balance - amount) if payment_method == 'wallet' else None
