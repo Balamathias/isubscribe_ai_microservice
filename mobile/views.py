@@ -4,7 +4,7 @@ from mobile.electricity import verify_merchant, process_electricity
 from mobile.education import verify_education_merchant, process_education
 from utils.response import ResponseMixin
 from rest_framework import status
-from utils import format_data_amount
+from utils import CASHBACK_VALUE, format_data_amount
 import datetime
 
 from django.utils.decorators import method_decorator
@@ -682,11 +682,13 @@ class AppConfig(APIView, ResponseMixin):
             jamb_price_row = next((item for item in services.data if item.get('name') == 'jamb_price'), None)
             waec_price_row = next((item for item in services.data if item.get('name') == 'waec_price'), None)
             electricity_commission_rate_row = next((item for item in services.data if item.get('name') == 'electricity_commission_rate'), None)
+            cashback_rate_row = next((item for item in services.data if item.get('name') == 'cashback_rate'), None)
 
             jamb_price = float(jamb_price_row.get('value', 0)) if jamb_price_row else 0.0
             waec_price = float(waec_price_row.get('value', 0)) if waec_price_row else 0.0
             electricity_commission = float(electricity_commission_rate_row.get('value', 0.1)) if electricity_commission_rate_row else 0.1
-            
+            cashback_rate = float(cashback_rate_row.get('value', CASHBACK_VALUE)) if cashback_rate_row else CASHBACK_VALUE
+
             current_date = datetime.datetime.now()
             year = current_date.year % 100
             month = current_date.month
@@ -700,6 +702,7 @@ class AppConfig(APIView, ResponseMixin):
                 'jamb_price': jamb_price,
                 'waec_price': waec_price,
                 'electricity_commission_rate': electricity_commission,
+                'cashback_rate': cashback_rate,
             }
 
             return self.response(
