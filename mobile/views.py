@@ -681,9 +681,11 @@ class AppConfig(APIView, ResponseMixin):
 
             jamb_price_row = next((item for item in services.data if item.get('name') == 'jamb_price'), None)
             waec_price_row = next((item for item in services.data if item.get('name') == 'waec_price'), None)
+            electricity_commission_rate_row = next((item for item in services.data if item.get('name') == 'electricity_commission_rate'), None)
 
             jamb_price = float(jamb_price_row.get('value', 0)) if jamb_price_row else 0.0
             waec_price = float(waec_price_row.get('value', 0)) if waec_price_row else 0.0
+            electricity_commission = float(electricity_commission_rate_row.get('value', 0.1)) if electricity_commission_rate_row else 0.1
             
             current_date = datetime.datetime.now()
             year = current_date.year % 100
@@ -697,6 +699,7 @@ class AppConfig(APIView, ResponseMixin):
                 'support_phone': '+2347049597498',
                 'jamb_price': jamb_price,
                 'waec_price': waec_price,
+                'electricity_commission_rate': electricity_commission,
             }
 
             return self.response(
