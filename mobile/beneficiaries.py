@@ -19,6 +19,7 @@ def save_beneficiary(request) -> Dict:
             return {"error": "Phone number is required", "data": None}
 
         network = verify_number(phone)
+        
         if not network:
             return {"error": "Could not verify phone number", "data": None}
 
