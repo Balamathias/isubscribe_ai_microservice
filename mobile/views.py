@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from mobile.beneficiaries import save_beneficiary
 from mobile.electricity import verify_merchant, process_electricity
 from mobile.education import verify_education_merchant, process_education
+from mobile.monnify import generate_reserved_account
 from utils.response import ResponseMixin
 from rest_framework import status
 from utils import CASHBACK_VALUE, format_data_amount
@@ -1078,4 +1079,90 @@ class DeleteAccountView(APIView, ResponseMixin):
                 error={"detail": str(e)},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="An unknown error occurred"
+            )
+        
+
+@method_decorator(csrf_exempt, name="dispatch")
+class GenerateReservedAccountView(APIView, ResponseMixin):
+    permission_classes = []
+
+    def post(self, request):
+        """
+        POST /reserved-account/  —  generate a reserved account for the current user
+        
+        Request body (optional):
+            - bvn: User's Bank Verification Number
+            - nin: User's National Identification Number
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+
+            result = generate_reserved_account(request)
+
+            if result.get('error'):
+                return self.response(
+                    error=result.get('error'),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message=result.get('error', {}).get('message', 'Failed to generate reserved account')
+                )
+
+            return self.response(
+                data=result.get('data'),
+                status_code=status.HTTP_201_CREATED,
+                message="Reserved account generated successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred while generating reserved account"
+            )
+
+    def get(self, request):
+        """
+        GET /reserved-account/  —  get existing reserved account for the current user
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            supabase = request.supabase_client
+
+            response = supabase.table('accounts')\
+                .select('*')\
+                .eq('user', user.id)\
+                .single()\
+                .execute()
+
+            if not response.data:
+                return self.response(
+                    error={"detail": "No reserved account found"},
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    message="No reserved account found for this user"
+                )
+
+            return self.response(
+                data=response.data,
+                status_code=status.HTTP_200_OK,
+                message="Reserved account retrieved successfully"
+            )
+
+        except Exception as e:
+            print(e)
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unknown error occurred while retrieving reserved account"
             )

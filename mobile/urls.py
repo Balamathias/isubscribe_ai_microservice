@@ -18,6 +18,7 @@ from .views import (
     ListEducationServicesView,
     RatingsView,
     DeleteAccountView,
+    GenerateReservedAccountView,
 )
 
 urlpatterns = [
@@ -38,4 +39,5 @@ urlpatterns = [
     path("list-education/", ListEducationServicesView.as_view(), name="list-education"),
     path("ratings/", RatingsView.as_view(), name="ratings"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
+    path("reserved-account/", GenerateReservedAccountView.as_view(), name="generate-reserved-account"),
 ]
