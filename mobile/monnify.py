@@ -135,7 +135,7 @@ def generate_reserved_account(request: Any) -> Dict[str, Any]:
 
             supabase: Client = request.supabase_client
             
-            acct_response = supabase.table('accounts')\
+            acct_response = supabase.table('account')\
                 .upsert(account_data, on_conflict='user')\
                 .execute()
             
