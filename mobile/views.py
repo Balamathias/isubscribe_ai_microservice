@@ -1248,15 +1248,17 @@ class PushTokenView(APIView, ResponseMixin):
         {
             "user_id": "uuid",
             "token": "push_token",
-            "active": true|false
+            "active": true|false,
+            "device_type": "android|ios|web"  # Optional, for future use
         }
         """
         try:
             supabase: Client = request.supabase_client
-            
+
             user_id = request.data.get('user_id')
             token = request.data.get('token')
             active = request.data.get('active', True)
+            device_type = request.data.get('device_type', 'android')
             
             if not user_id or not token:
                 return self.response(
@@ -1268,7 +1270,8 @@ class PushTokenView(APIView, ResponseMixin):
             upsert_response = supabase.table('push_tokens').upsert({
                 'user': user_id,
                 'token': token,
-                'active': active
+                'active': active,
+                'device_type': device_type
             }).execute()
             
             return self.response(
