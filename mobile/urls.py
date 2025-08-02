@@ -19,6 +19,7 @@ from .views import (
     RatingsView,
     DeleteAccountView,
     GenerateReservedAccountView,
+    PushTokenView,
 )
 
 urlpatterns = [
@@ -40,4 +41,5 @@ urlpatterns = [
     path("ratings/", RatingsView.as_view(), name="ratings"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
     path("reserved-account/", GenerateReservedAccountView.as_view(), name="generate-reserved-account"),
+    path("push-tokens/", PushTokenView.as_view(), name="push-tokens"),
 ]
