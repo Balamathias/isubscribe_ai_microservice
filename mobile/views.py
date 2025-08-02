@@ -679,16 +679,25 @@ class AppConfig(APIView, ResponseMixin):
             services = supabase.table('app_config')\
                 .select('*')\
                 .execute()
+            
+            config_map = {
+                'jamb_price': {'default': 0.0, 'type': float},
+                'waec_price': {'default': 0.0, 'type': float},
+                'electricity_commission_rate': {'default': 0.1, 'type': float},
+                'cashback_rate': {'default': CASHBACK_VALUE, 'type': float},
+                'update_available': {'default': False, 'type': lambda x: x.lower() == 'true'},
+                'update_url': {'default': '', 'type': str},
+                'update_message': {'default': '', 'type': str},
+            }
 
-            jamb_price_row = next((item for item in services.data if item.get('name') == 'jamb_price'), None)
-            waec_price_row = next((item for item in services.data if item.get('name') == 'waec_price'), None)
-            electricity_commission_rate_row = next((item for item in services.data if item.get('name') == 'electricity_commission_rate'), None)
-            cashback_rate_row = next((item for item in services.data if item.get('name') == 'cashback_rate'), None)
-
-            jamb_price = float(jamb_price_row.get('value', 0)) if jamb_price_row else 0.0
-            waec_price = float(waec_price_row.get('value', 0)) if waec_price_row else 0.0
-            electricity_commission = float(electricity_commission_rate_row.get('value', 0.1)) if electricity_commission_rate_row else 0.1
-            cashback_rate = float(cashback_rate_row.get('value', CASHBACK_VALUE)) if cashback_rate_row else CASHBACK_VALUE
+            config_values = {}
+            for name, config in config_map.items():
+                row = next((item for item in services.data if item.get('name') == name), None)
+                if row:
+                    value = row.get('value', config['default'])
+                    config_values[name] = config['type'](value)
+                else:
+                    config_values[name] = config['default']
 
             current_date = datetime.datetime.now()
             year = current_date.year % 100
@@ -700,10 +709,7 @@ class AppConfig(APIView, ResponseMixin):
                 'app_version': app_version,
                 'support_email': 'support@isubscribe.com',
                 'support_phone': '+2347049597498',
-                'jamb_price': jamb_price,
-                'waec_price': waec_price,
-                'electricity_commission_rate': electricity_commission,
-                'cashback_rate': cashback_rate,
+                **config_values,
             }
 
             return self.response(
