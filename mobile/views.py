@@ -7,6 +7,7 @@ from utils.response import ResponseMixin
 from rest_framework import status
 from utils import CASHBACK_VALUE, format_data_amount
 import datetime
+import logging
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -14,6 +15,8 @@ from auth.supabase import SupabaseAuthentication
 from .account import generate_palmpay_account
 
 from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 
 class WalletAPIView(APIView, ResponseMixin):
@@ -1171,4 +1174,113 @@ class GenerateReservedAccountView(APIView, ResponseMixin):
                 error={"detail": str(e)},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="An unknown error occurred while retrieving reserved account"
+            )
+
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PushTokenView(APIView, ResponseMixin):
+    """
+    """
+    permission_classes = []
+    
+    def get(self, request):
+        """
+        GET /mobile/push-tokens/
+        
+        Query params:
+        - limit: Number of tokens to return (default: 50)
+        - offset: Number of tokens to skip (default: 0)
+        - user_id: Filter by specific user ID
+        - active: Filter by active status (true/false)
+        
+        Returns paginated list of push tokens with user information
+        """
+        try:
+            supabase: Client = request.supabase_client
+
+            limit = int(request.query_params.get('limit', 50))
+            offset = int(request.query_params.get('offset', 0))
+            user_id = request.query_params.get('user_id')
+            active = request.query_params.get('active')
+            
+            query = supabase.table('push_tokens').select(
+                'id, token, user, active, created_at'
+            )
+            
+            if user_id:
+                query = query.eq('user', user_id)
+            
+            if active is not None:
+                query = query.eq('active', active.lower() == 'true')
+            
+            count_response = query.execute()
+            total_count = len(count_response.data) if count_response.data else 0
+            
+            tokens_response = query.order('created_at', desc=True).range(
+                offset, offset + limit - 1
+            ).execute()
+            
+            return self.response(
+                data=tokens_response.data,
+                count=total_count,
+                next=offset + limit if offset + limit < total_count else None,
+                previous=offset - limit if offset > 0 else None,
+                message="Push tokens retrieved successfully",
+                status_code=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in push token list: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to retrieve push tokens",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def post(self, request):
+        """
+        POST /mobile/push-tokens/
+        
+        Create or update push tokens for a user
+        
+        Request body:
+        {
+            "user_id": "uuid",
+            "token": "push_token",
+            "active": true|false
+        }
+        """
+        try:
+            supabase: Client = request.supabase_client
+            
+            user_id = request.data.get('user_id')
+            token = request.data.get('token')
+            active = request.data.get('active', True)
+            
+            if not user_id or not token:
+                return self.response(
+                    error={"detail": "User ID and token are required"},
+                    message="User ID and token are required",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            upsert_response = supabase.table('push_tokens').upsert({
+                'user': user_id,
+                'token': token,
+                'active': active
+            }).execute()
+            
+            return self.response(
+                data=upsert_response.data[0] if upsert_response.data else {},
+                message="Push token created/updated successfully",
+                status_code=status.HTTP_201_CREATED
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in push token create/update: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to create/update push token",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
