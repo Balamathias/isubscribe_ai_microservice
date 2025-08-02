@@ -17,7 +17,7 @@ from .views import (
     VerifyEducationMerchantView,
     ListEducationServicesView,
     RatingsView,
-    DeleteAccountView,
+    DeleteAccountView,  
 )
 
 urlpatterns = [

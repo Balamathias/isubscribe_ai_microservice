@@ -21,7 +21,10 @@ from .views import (
     AdminSystemViewSet,
     AdminUserManagementViewSet,
     AdminTransactionViewSet,
-    AdminReportsViewSet
+    AdminReportsViewSet,
+    AdminNotificationsViewSet,
+    
+    AdminPushTokenView,
 )
 
 app_name = 'admin'
@@ -34,6 +37,7 @@ router.register(r'system', AdminSystemViewSet, basename='system')
 router.register(r'users', AdminUserManagementViewSet, basename='users')
 router.register(r'transactions', AdminTransactionViewSet, basename='transactions')
 router.register(r'reports', AdminReportsViewSet, basename='reports')
+router.register(r'notifications', AdminNotificationsViewSet, basename='notifications')
 
 urlpatterns = [
     # Include all router URLs
@@ -41,6 +45,7 @@ urlpatterns = [
     
     # Additional custom endpoints can be added here
     # path('custom-endpoint/', CustomView.as_view(), name='custom-endpoint'),
+    path('push-tokens/', AdminPushTokenView.as_view(), name='push-tokens'),
 ]
 
 """

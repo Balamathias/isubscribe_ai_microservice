@@ -33,6 +33,7 @@ import logging
 import csv
 import io
 
+from mobile.notifications import send_push
 from utils.response import ResponseMixin
 from .services import (
     UserAnalyticsService,
@@ -894,5 +895,397 @@ class AdminReportsViewSet(ViewSet, ResponseMixin):
                 message="Failed to export data",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AdminPushTokenView(APIView, ResponseMixin):
+    """
+    Push token management endpoints for admin operations
+    """
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanModifyUsers]
+    
+    def get(self, request):
+        """
+        GET /admin/push-tokens/
+        
+        Query params:
+        - limit: Number of tokens to return (default: 50)
+        - offset: Number of tokens to skip (default: 0)
+        - user_id: Filter by specific user ID
+        - active: Filter by active status (true/false)
+        
+        Returns paginated list of push tokens with user information
+        """
+        try:
+            limit = int(request.query_params.get('limit', 50))
+            offset = int(request.query_params.get('offset', 0))
+            user_id = request.query_params.get('user_id')
+            active = request.query_params.get('active')
+            
+            query = supabase.table('push_tokens').select(
+                'id, token, user, active, created_at'
+            )
+            
+            if user_id:
+                query = query.eq('user', user_id)
+            
+            if active is not None:
+                query = query.eq('active', active.lower() == 'true')
+            
+            count_response = query.execute()
+            total_count = len(count_response.data) if count_response.data else 0
+            
+            tokens_response = query.order('created_at', desc=True).range(
+                offset, offset + limit - 1
+            ).execute()
+            
+            return self.response(
+                data=tokens_response.data,
+                count=total_count,
+                next=offset + limit if offset + limit < total_count else None,
+                previous=offset - limit if offset > 0 else None,
+                message="Push tokens retrieved successfully",
+                status_code=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in push token list: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to retrieve push tokens",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def post(self, request):
+        """
+        POST /admin/push-tokens/
+        
+        Create or update push tokens for a user
+        
+        Request body:
+        {
+            "user_id": "uuid",
+            "token": "push_token",
+            "active": true|false
+        }
+        """
+        try:
+            user_id = request.data.get('user_id')
+            token = request.data.get('token')
+            active = request.data.get('active', True)
+            
+            if not user_id or not token:
+                return self.response(
+                    error={"detail": "User ID and token are required"},
+                    message="User ID and token are required",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            upsert_response = supabase.table('push_tokens').upsert({
+                'user': user_id,
+                'token': token,
+                'active': active
+            }).execute()
+            
+            return self.response(
+                data=upsert_response.data[0] if upsert_response.data else {},
+                message="Push token created/updated successfully",
+                status_code=status.HTTP_201_CREATED
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in push token create/update: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to create/update push token",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
+@method_decorator(csrf_exempt, name='dispatch')
+class AdminNotificationsViewSet(ViewSet, ResponseMixin):
+    """
+    Push notification management endpoints for admin operations
+    """
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanModifyUsers]
+    
+    @action(detail=False, methods=['post'], url_path='send-push')
+    def send_push(self, request):
+        """
+        POST /admin/notifications/send-push/
+        
+        Send push notifications to users:
+        - Single user by user_id
+        - Multiple users by user_ids list
+        - All users (broadcast)
+        - Users by role/criteria
+        
+        Request body:
+        {
+            "target_type": "single|multiple|broadcast|role",
+            "user_id": "uuid",  // For single user
+            "user_ids": ["uuid1", "uuid2"],  // For multiple users
+            "role": "user|admin",  // For role-based targeting
+            "title": "Notification title",
+            "body": "Notification message",
+            "data": {  // Optional custom data
+                "action": "open_screen",
+                "screen": "dashboard"
+            },
+            "priority": "normal|high",
+            "sound": "default",
+            "badge": 1
+        }
+        """
+        try:
+            target_type = request.data.get('target_type', 'single')
+            title = request.data.get('title')
+            body = request.data.get('body')
+            data = request.data.get('data', {})
+            badge = request.data.get('badge', 1)
+            
+            if not title or not body:
+                return self.response(
+                    error={"detail": "Title and body are required"},
+                    message="Title and body are required",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            push_tokens = []
+            
+            if target_type == 'single':
+                user_id = request.data.get('user_id')
+                if not user_id:
+                    return self.response(
+                        error={"detail": "User ID is required for single user targeting"},
+                        message="User ID is required",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                tokens_response = supabase.table('push_tokens').select('token').eq('user', user_id).eq('active', True).execute()
+                push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
+                
+            elif target_type == 'multiple':
+                user_ids = request.data.get('user_ids', [])
+                if not user_ids:
+                    return self.response(
+                        error={"detail": "User IDs list is required for multiple user targeting"},
+                        message="User IDs are required",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                tokens_response = supabase.table('push_tokens').select('token').in_('user', user_ids).eq('active', True).execute()
+                push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
+                
+            elif target_type == 'broadcast':
+                tokens_response = supabase.table('push_tokens').select('token').eq('active', True).execute()
+                push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
+                
+            elif target_type == 'role':
+                role = request.data.get('role')
+                if not role:
+                    return self.response(
+                        error={"detail": "Role is required for role-based targeting"},
+                        message="Role is required",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                users_response = supabase.table('profile').select('id').eq('role', role).execute()
+                if users_response.data:
+                    user_ids = [user['id'] for user in users_response.data]
+                    tokens_response = supabase.table('push_tokens').select('token').in_('user', user_ids).eq('active', True).execute()
+                    push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
+            
+            if not push_tokens:
+                return self.response(
+                    error={"detail": "No active push tokens found for the specified target"},
+                    message="No recipients found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            successful_sends = 0
+            failed_sends = 0
+            failed_tokens = []
+            
+            for token in push_tokens:
+                try:
+                    notification_data = {
+                        "to": token,
+                        "title": title,
+                        "body": body,
+                        "data": data,
+                        "badge": badge
+                    }
+                    
+                    send_push(notification_data)
+                    successful_sends += 1
+                    
+                except Exception as e:
+                    failed_sends += 1
+                    failed_tokens.append({"token": token, "error": str(e)})
+                    logger.warning(f"Failed to send push notification to token {token}: {str(e)}")
+            
+            admin_user = getattr(request, 'user', None)
+            admin_email = admin_user.email if admin_user else 'system'
+            logger.info(f"Admin notification: {admin_email} sent '{title}' to {successful_sends} devices. Target type: {target_type}")
+            
+            result = {
+                "target_type": target_type,
+                "total_tokens": len(push_tokens),
+                "successful_sends": successful_sends,
+                "failed_sends": failed_sends,
+                "failed_tokens": failed_tokens[:10],
+                "notification": {
+                    "title": title,
+                    "body": body,
+                    "data": data
+                }
+            }
+            
+            return self.response(
+                data=result,
+                message=f"Push notification sent to {successful_sends} out of {len(push_tokens)} devices",
+                status_code=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in send push notification: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to send push notification",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def tokens(self, request):
+        """
+        GET /admin/notifications/tokens/
+        
+        Get push token statistics and management
+        
+        Query params:
+        - user_id: Get tokens for specific user
+        - active: Filter by active status (true/false)
+        - search: Search in token or user information
+        - limit, offset: Pagination
+        
+        Returns push token information and statistics
+        """
+        try:
+            user_id = request.query_params.get('user_id')
+            active = request.query_params.get('active')
+            search = request.query_params.get('search', '').strip()
+            limit = int(request.query_params.get('limit', 50))
+            offset = int(request.query_params.get('offset', 0))
+            
+            query = supabase.table('push_tokens').select('*, profile!inner(email, full_name)')
+            
+            if user_id:
+                query = query.eq('user', user_id)
+            
+            if active is not None:
+                query = query.eq('active', active.lower() == 'true')
+            
+            if search:
+                search_terms = f"token.ilike.%{search}%,profile.email.ilike.%{search}%,profile.full_name.ilike.%{search}%"
+                query = query.or_(search_terms)
+            
+            count_response = query.execute()
+            total_count = len(count_response.data) if count_response.data else 0
+            
+            tokens_response = query.order('created_at', desc=True).range(
+                offset, offset + limit - 1
+            ).execute()
+            
+            stats_query = supabase.table('push_tokens').select('active')
+            stats_response = stats_query.execute()
+            
+            active_count = 0
+            inactive_count = 0
+            if stats_response.data:
+                active_count = len([token for token in stats_response.data if token.get('active')])
+                inactive_count = len([token for token in stats_response.data if not token.get('active')])
+                
+            result = {
+                "tokens": tokens_response.data if tokens_response.data else [],
+                "statistics": {
+                    "total_tokens": total_count,
+                    "active_tokens": active_count,
+                    "inactive_tokens": inactive_count
+                },
+            }
+            
+            return self.response(
+                data=result,
+                message="Push tokens retrieved successfully",
+                status_code=status.HTTP_200_OK,
+                count=total_count,
+                next=offset + limit if offset + limit < total_count else None,
+                previous=offset - limit if offset > 0 else None
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in get push tokens: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to retrieve push tokens",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def test_notification(self, request):
+        """
+        POST /admin/notifications/test_notification/
+        
+        Send a test notification to admin's own device or specified test token
+        
+        Request body:
+        {
+            "token": "expo_push_token",  // Optional test token
+            "title": "Test Notification",
+            "body": "This is a test message"
+        }
+        """
+        try:
+            test_token = request.data.get('token')
+            title = request.data.get('title', 'Test Notification')
+            body = request.data.get('body', 'This is a test push notification from iSubscribe Admin')
+            
+            if not test_token:
+                admin_user = getattr(request, 'user', None)
+                if admin_user:
+                    tokens_response = supabase.table('push_tokens').select('token').eq('user', admin_user.id).eq('active', True).limit(1).execute()
+                    if tokens_response.data:
+                        test_token = tokens_response.data[0]['token']
+            
+            if not test_token:
+                return self.response(
+                    error={"detail": "No test token available. Please provide a token or ensure you have an active push token."},
+                    message="Test token required",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            notification_data = {
+                "to": test_token,
+                "title": title,
+                "body": body,
+                "data": {"test": True, "timestamp": datetime.now().isoformat()}
+            }
+            
+            send_push(notification_data)
+            
+            return self.response(
+                data={"token": test_token, "notification": notification_data},
+                message="Test notification sent successfully",
+                status_code=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error in test notification: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to send test notification",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
