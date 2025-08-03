@@ -33,7 +33,7 @@ import logging
 import csv
 import io
 
-from mobile.notifications import send_push_notification
+from mobile.notifications import send_push_notification, send_bulk_push_notifications
 from utils.response import ResponseMixin
 from .services import (
     UserAnalyticsService,
@@ -1111,21 +1111,113 @@ class AdminNotificationsViewSet(ViewSet, ResponseMixin):
 
             logger.info(f"Sending push notification to {len(push_tokens)} tokens. Target type: {target_type} with data: {data}.")
             
-            for token in push_tokens:
+            ### Use bulk sending for efficiency - batch tokens into groups of 100
+            batch_size = 100
+            subtitle = request.data.get('subtitle', None)
+            
+            if len(push_tokens) <= batch_size:
+                ### Single batch - use bulk sending
                 try:
-                    send_push_notification(
-                        token=token,
-                        title=title,
-                        body=body,
-                        subtitle=request.data.get('subtitle', None),
-                        extra_data=data,
-                    )
-                    successful_sends += 1
+                    notifications = []
+                    for token in push_tokens:
+                        notification = {
+                            "token": token,
+                            "title": title,
+                            "body": body,
+                            "extra_data": data
+                        }
+                        if subtitle:
+                            notification["subtitle"] = subtitle
+                        notifications.append(notification)
                     
+                    result = send_bulk_push_notifications(notifications)
+                    
+                    ### Process bulk result
+                    if "data" in result:
+                        for i, ticket in enumerate(result["data"]):
+                            if ticket.get("status") == "ok":
+                                successful_sends += 1
+                            else:
+                                failed_sends += 1
+                                failed_tokens.append({
+                                    "token": push_tokens[i], 
+                                    "error": ticket.get("details", {}).get("error", "Unknown error")
+                                })
+                    else:
+                        ### If no ticket data, assume all succeeded (fallback)
+                        successful_sends = len(push_tokens)
+                        
                 except Exception as e:
-                    failed_sends += 1
-                    failed_tokens.append({"token": token, "error": str(e)})
-                    logger.warning(f"Failed to send push notification to token {token}: {str(e)}")
+                    logger.error(f"Bulk push notification failed: {str(e)}")
+                    ### Fallback to individual sending
+                    for token in push_tokens:
+                        try:
+                            send_push_notification(
+                                token=token,
+                                title=title,
+                                body=body,
+                                subtitle=subtitle,
+                                extra_data=data,
+                            )
+                            successful_sends += 1
+                        except Exception as individual_error:
+                            failed_sends += 1
+                            failed_tokens.append({"token": token, "error": str(individual_error)})
+            else:
+                # Multiple batches needed
+                for i in range(0, len(push_tokens), batch_size):
+                    batch_tokens = push_tokens[i:i + batch_size]
+                    
+                    try:
+                        notifications = []
+                        for token in batch_tokens:
+                            notification = {
+                                "token": token,
+                                "title": title,
+                                "body": body,
+                                "extra_data": data
+                            }
+                            if subtitle:
+                                notification["subtitle"] = subtitle
+                            notifications.append(notification)
+                        
+                        result = send_bulk_push_notifications(notifications)
+                        
+                        # Process batch result
+                        if "data" in result:
+                            for j, ticket in enumerate(result["data"]):
+                                if ticket.get("status") == "ok":
+                                    successful_sends += 1
+                                else:
+                                    failed_sends += 1
+                                    token_index = i + j
+                                    if token_index < len(push_tokens):
+                                        failed_tokens.append({
+                                            "token": push_tokens[token_index], 
+                                            "error": ticket.get("details", {}).get("error", "Unknown error")
+                                        })
+                        else:
+                            # If no ticket data, assume all in batch succeeded
+                            successful_sends += len(batch_tokens)
+                            
+                        logger.info(f"Batch {i//batch_size + 1}: Sent to {len(batch_tokens)} tokens")
+                        
+                    except Exception as batch_error:
+                        logger.error(f"Batch {i//batch_size + 1} failed: {str(batch_error)}")
+                        # Fallback to individual sending for this batch
+                        for token in batch_tokens:
+                            try:
+                                send_push_notification(
+                                    token=token,
+                                    title=title,
+                                    body=body,
+                                    subtitle=subtitle,
+                                    extra_data=data,
+                                )
+                                successful_sends += 1
+                            except Exception as individual_error:
+                                failed_sends += 1
+                                failed_tokens.append({"token": token, "error": str(individual_error)})
             
             admin_user = getattr(request, 'user', None)
             admin_email = admin_user.email if admin_user else 'system'
