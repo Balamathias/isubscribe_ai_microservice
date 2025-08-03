@@ -698,7 +698,10 @@ class AppConfig(APIView, ResponseMixin):
                 row = next((item for item in services.data if item.get('name') == name), None)
                 if row:
                     value = row.get('value', config['default'])
-                    config_values[name] = config['type'](value)
+                    if value is not None:
+                        config_values[name] = config['type'](value)
+                    else:
+                        config_values[name] = config['default']
                 else:
                     config_values[name] = config['default']
 
