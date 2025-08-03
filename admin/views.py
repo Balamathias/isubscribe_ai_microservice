@@ -33,7 +33,7 @@ import logging
 import csv
 import io
 
-from mobile.notifications import send_push
+from mobile.notifications import send_push_notification
 from utils.response import ResponseMixin
 from .services import (
     UserAnalyticsService,
@@ -903,7 +903,7 @@ class AdminPushTokenView(APIView, ResponseMixin):
     Push token management endpoints for admin operations
     """
     authentication_classes = [AdminSupabaseAuthentication]
-    permission_classes = [CanModifyUsers]
+    permission_classes = []
     
     def get(self, request):
         """
@@ -1009,7 +1009,7 @@ class AdminNotificationsViewSet(ViewSet, ResponseMixin):
     Push notification management endpoints for admin operations
     """
     authentication_classes = [AdminSupabaseAuthentication]
-    permission_classes = [CanModifyUsers]
+    permission_classes = []
     
     @action(detail=False, methods=['post'], url_path='send-push')
     def send_push(self, request):
@@ -1111,15 +1111,13 @@ class AdminNotificationsViewSet(ViewSet, ResponseMixin):
             
             for token in push_tokens:
                 try:
-                    notification_data = {
-                        "to": token,
-                        "title": title,
-                        "body": body,
-                        "data": data,
-                        "badge": badge
-                    }
-                    
-                    send_push(notification_data)
+                    send_push_notification(
+                        token=token,
+                        title=title,
+                        body=body,
+                        subtitle=data.get('subtitle', None),
+                        extra_data=data,
+                    )
                     successful_sends += 1
                     
                 except Exception as e:
@@ -1216,7 +1214,8 @@ class AdminNotificationsViewSet(ViewSet, ResponseMixin):
                     "inactive_tokens": inactive_count
                 },
             }
-            
+
+
             return self.response(
                 data=result,
                 message="Push tokens retrieved successfully",
