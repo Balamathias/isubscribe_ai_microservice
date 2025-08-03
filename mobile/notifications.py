@@ -45,7 +45,7 @@ def send_push_notification(
         "title": title,
         "body": body,
         "badge": 1,
-        'data': extra_data if extra_data else {}
+        'data': {}
     }
     
     if subtitle:

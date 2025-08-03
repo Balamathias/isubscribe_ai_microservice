@@ -1108,6 +1108,8 @@ class AdminNotificationsViewSet(ViewSet, ResponseMixin):
             successful_sends = 0
             failed_sends = 0
             failed_tokens = []
+
+            logger.info(f"Sending push notification to {len(push_tokens)} tokens. Target type: {target_type} with data: {data}.")
             
             for token in push_tokens:
                 try:
@@ -1115,7 +1117,7 @@ class AdminNotificationsViewSet(ViewSet, ResponseMixin):
                         token=token,
                         title=title,
                         body=body,
-                        subtitle=data.get('subtitle', None),
+                        subtitle=request.data.get('subtitle', None),
                         extra_data=data,
                     )
                     successful_sends += 1
