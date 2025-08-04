@@ -238,11 +238,10 @@ def process_education(request: Any):
                 'charge_from': method
             }).execute()
             
-            if not refund:
-                supabase.rpc('update_cashback_balance', {
-                    'user_id': str(request.user.id),
-                    'cashback': return_cashback
-                }).execute()
+            supabase.rpc('update_cashback_balance', {
+                'user_id': str(request.user.id),
+                'cashback': return_cashback if not refund else -return_cashback
+            }).execute()
                 
         except Exception as e:
             print("RPC Error: ", e)
@@ -280,7 +279,7 @@ def process_education(request: Any):
     payload = {
         'title': service_names.get(service_type, 'Education Service'),
         'status': 'success',
-        'description': f'{service_names.get(service_type)} completed successfully',
+        'description': f'{service_names.get(service_type, "Education Service")} for {phone}',
         'user': request.user.id,
         'amount': total_amount,
         'provider': 'vtpass',
@@ -299,29 +298,33 @@ def process_education(request: Any):
     }
     
     bonus_cashback = total_amount * CASHBACK_VALUE
+
+    charge_result = charge_wallet(payment_method, amount=total_amount)
+    if charge_result.get('error'):
+        raise Exception(charge_result.get('error'))
+    
+    payload['status'] = 'pending'
+
+    tx_response = supabase.table('history')\
+        .insert(payload)\
+        .execute()
     
     if code == '000':
-        charge_result = charge_wallet(payment_method, amount=total_amount)
-        if charge_result.get('error'):
-            raise Exception(charge_result.get('error'))
-        
-        # Parse response data based on service type
         pins = []
         cards = []
+
+        payload['status'] = 'success'
+        payload['description'] = f"{service_names.get(service_type, 'Education Service')} for {phone} completed successfully"
         
-        # Extract pins/cards from response
         if response.get('Pin'):
-            # JAMB/DE format: "Pin : 3678251321392432"
             pin_text = response.get('Pin', '')
             if ':' in pin_text:
                 pin_value = pin_text.split(':')[-1].strip()
                 pins.append(pin_value)
         
         if response.get('cards'):
-            # WAEC format: [{"Serial": "WRN123456790", "Pin": "098765432112"}]
             cards = response.get('cards', [])
         
-        # Parse purchased_code as fallback
         purchased_code = response.get('purchased_code', '')
         if purchased_code and not pins and not cards:
             if service_type in ['jamb', 'de']:
@@ -353,7 +356,8 @@ def process_education(request: Any):
         
         # Insert main transaction
         history_response = supabase.table('history')\
-            .insert(payload)\
+            .update(payload)\
+            .eq('id', tx_response.data[0]['id'])\
             .execute()
         
         if not history_response.data:
@@ -396,9 +400,9 @@ def process_education(request: Any):
         
         payload['status'] = 'pending'
         payload['description'] = 'Education service purchase is pending'
-        
-        history_response = supabase.table('history').insert(payload).execute()
-        
+
+        history_response = supabase.table('history').update(payload).eq('id', tx_response.data[0]['id']).execute()
+
         if not history_response.data:
             raise Exception("Failed to insert pending transaction history")
         
@@ -409,12 +413,17 @@ def process_education(request: Any):
         }
     
     else:
+
+        charge_result = charge_wallet(payment_method, amount=total_amount, refund=True)
+        if charge_result.get('error'):
+            raise Exception(charge_result.get('error'))
+        
         payload['status'] = 'failed'
         payload['description'] = RESPONSE_CODES.get(code, {}).get('message', 'Education service purchase failed')
         payload['balance_after'] = balance
-        
-        history_response = supabase.table('history').insert(payload).execute()
-        
+
+        history_response = supabase.table('history').update(payload).eq('id', tx_response.data[0]['id']).execute()
+
         if not history_response.data:
             raise Exception("Failed to insert failed transaction history")
         
