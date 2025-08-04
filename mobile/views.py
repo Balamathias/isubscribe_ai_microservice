@@ -1342,10 +1342,10 @@ class ProfileView(APIView, ResponseMixin):
                 message="Failed to retrieve profile"
             )
         
-    def post(self, request):
+    def put(self, request):
         """
-        POST /mobile/profile/
-        
+        PUT /mobile/profile/
+
         Update the current user's profile information
         
         Request body:
