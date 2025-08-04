@@ -1290,3 +1290,126 @@ class PushTokenView(APIView, ResponseMixin):
                 message="Failed to create/update push token",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ProfileView(APIView, ResponseMixin):
+    """
+    View for managing user profile information
+    """
+    permission_classes = []
+    
+    def get(self, request):
+        """
+        GET /mobile/profile/
+        
+        Returns the current user's profile information
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            supabase: Client = request.supabase_client
+            
+            profile_response = supabase.table('profile')\
+                .select('*')\
+                .eq('id', user.id)\
+                .single()\
+                .execute()
+            
+            if not profile_response.data:
+                return self.response(
+                    error={"detail": "Profile not found"},
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    message="Profile not found"
+                )
+            
+            return self.response(
+                data=profile_response.data,
+                status_code=status.HTTP_200_OK,
+                message="Profile retrieved successfully"
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error retrieving profile: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="Failed to retrieve profile"
+            )
+        
+    def post(self, request):
+        """
+        POST /mobile/profile/
+        
+        Update the current user's profile information
+        
+        Request body:
+        {
+            "full_name": "New Name",
+            "phone": "<New Phone Number>",
+            "email": "<New Email Address>",
+            "state": "<New State>",
+            "username": "<New Username>"
+        }
+        """
+        try:
+            user = request.user
+            if not user:
+                return self.response(
+                    error="Authentication required",
+                    status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            supabase: Client = request.supabase_client
+
+            profile_data = {
+                'full_name': request.data.get('full_name'),
+                'phone': request.data.get('phone'),
+                'email': request.data.get('email'),
+                'state': request.data.get('state'),
+                'username': request.data.get('username'),
+                'updated_at': datetime.datetime.now().isoformat()
+            }
+
+            if profile_data.get('email'):
+                try:
+                    from services.supabase import superbase
+                    superbase.auth.admin.update_user_by_id(
+                        uid=user.id,
+                        attributes={"email": profile_data['email']},
+                    )
+                except Exception as e:
+                    logger.exception(f"Failed to update user email: {str(e)}")
+                    return self.response(
+                        error={"detail": str(e)},
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        message="Failed to update email address"
+                    )
+                
+            update_response = supabase.table('profile').update(profile_data).eq('id', user.id).execute()
+
+            if not update_response.data:
+                return self.response(
+                    error={"detail": "Profile update failed"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="Profile update failed"
+                )
+
+            return self.response(
+                data=update_response.data,
+                status_code=status.HTTP_200_OK,
+                message="Profile updated successfully"
+            )
+
+        except Exception as e:
+            logger.exception(f"Error updating profile: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="Failed to update profile"
+            )
