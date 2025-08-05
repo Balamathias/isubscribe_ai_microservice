@@ -1395,7 +1395,7 @@ class ProfileView(APIView, ResponseMixin):
                     from services.supabase import superbase
                     superbase.auth.admin.update_user_by_id(
                         uid=user.id,
-                        attributes={"email": profile_data['email']},
+                        attributes={"email": profile_data['email'], "phone": profile_data.get('phone', '')},
                     )
                 except Exception as e:
                     logger.exception(f"Failed to update user email: {str(e)}")
