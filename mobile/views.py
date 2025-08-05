@@ -3,6 +3,7 @@ from mobile.beneficiaries import save_beneficiary
 from mobile.electricity import verify_merchant, process_electricity
 from mobile.education import verify_education_merchant, process_education
 from mobile.monnify import generate_reserved_account
+from mobile.notifications import send_bulk_push_notifications, send_push_notification
 from utils.response import ResponseMixin
 from rest_framework import status
 from utils import CASHBACK_VALUE, format_data_amount
@@ -1426,4 +1427,103 @@ class ProfileView(APIView, ResponseMixin):
                 error={"detail": str(e)},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="Failed to update profile"
+            )
+        
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SendNotificationView(APIView, ResponseMixin):
+    """
+    View for sending push notifications
+    """
+    permission_classes = []
+    
+    def post(self, request):
+        """
+        POST /mobile/send-notification/
+        
+        Send a push notification to a specific user or multiple users
+        
+        Request body for single notification:
+        {
+            "token": "ExponentPushToken[...]",
+            "title": "Notification Title",
+            "body": "Notification Body",
+            "subtitle": "Optional Subtitle",
+            "extra_data": {"key": "value"}
+        }
+        
+        Request body for bulk notifications:
+        {
+            "notifications": [
+                {
+                    "token": "ExponentPushToken[...]",
+                    "title": "Notification Title",
+                    "body": "Notification Body",
+                    "subtitle": "Optional Subtitle",
+                    "extra_data": {"key": "value"}
+                },
+                ...
+            ]
+        }
+        """
+        try:
+            notifications = request.data.get('notifications', [])
+
+            if notifications:
+                for i, notification in enumerate(notifications):
+                    if not notification.get('token') or not notification.get('title') or not notification.get('body'):
+                        return self.response(
+                            error={"detail": f"Notification {i+1} is missing required fields"},
+                            message="Each notification must have token, title, and body",
+                            status_code=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                result = send_bulk_push_notifications(notifications)
+                
+                return self.response(
+                    data=result,
+                    message=f"Bulk notifications processed. Sent: {result.get('sent_count', 0)}, Failed: {result.get('failed_count', 0)}",
+                    status_code=status.HTTP_200_OK
+                )
+            
+            token = request.data.get('token')
+            title = request.data.get('title')
+            body = request.data.get('body')
+            subtitle = request.data.get('subtitle')
+            extra_data = request.data.get('extra_data', {})
+            
+            if not token or not title or not body:
+                return self.response(
+                    error={"detail": "Token, title, and body are required"},
+                    message="Token, title, and body are required fields",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            result = send_push_notification(
+                token=token,
+                title=title,
+                body=body,
+                subtitle=subtitle,
+                extra_data=extra_data
+            )
+            
+            if result.get('success'):
+                return self.response(
+                    data=result,
+                    message="Notification sent successfully",
+                    status_code=status.HTTP_200_OK
+                )
+            else:
+                return self.response(
+                    error=result.get('error', {"detail": "Failed to send notification"}),
+                    message=result.get('message', "Failed to send notification"),
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+        except Exception as e:
+            logger.exception(f"Error sending notification: {str(e)}")
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to send notification",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

@@ -21,6 +21,7 @@ from .views import (
     GenerateReservedAccountView,
     PushTokenView,
     ProfileView,
+    SendNotificationView,
 )
 
 urlpatterns = [
@@ -44,4 +45,5 @@ urlpatterns = [
     path("reserved-account/", GenerateReservedAccountView.as_view(), name="generate-reserved-account"),
     path("push-tokens/", PushTokenView.as_view(), name="push-tokens"),
     path("profile/", ProfileView.as_view(), name="profile"),
+    path("send-notification/", SendNotificationView.as_view(), name="send-notification"),
 ]
