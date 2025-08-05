@@ -1436,6 +1436,7 @@ class SendNotificationView(APIView, ResponseMixin):
     View for sending push notifications
     """
     permission_classes = []
+    authentication_classes = []
     
     def post(self, request):
         """
