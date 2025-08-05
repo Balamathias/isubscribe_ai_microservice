@@ -447,7 +447,7 @@ def process_data_bundle(request: Any):
         if response and response.get('status') in ['success', 'pending']:
 
             payload['amount'] = amount
-            payload['description'] = f'You have successfully topped up {data_plan.get('quantity')} for {phone}.'
+            payload['description'] = f'Data plan for {phone} is being processed.'
             payload['balance_after'] = (balance - amount) if payment_method == 'wallet' else None
             payload['transaction_id'] = response.get('request-id', None)
             payload['commission'] = data_plan.get('commission')
@@ -468,6 +468,7 @@ def process_data_bundle(request: Any):
             if response.get('status') == 'success':
 
                 payload['title'] = 'Data Bonus'
+                payload['status'] = 'success'
                 payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
                 payload['amount'] = return_cashback
                 payload['type'] = 'cashback'
@@ -494,7 +495,7 @@ def process_data_bundle(request: Any):
                 },
                 'status': 'pending' if response.get('status') == 'pending' else None
             }
-        
+
         
         if response.get('status') in ['fail', 'failed', 'error']:
             response_message = response.get('message')
