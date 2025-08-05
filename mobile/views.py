@@ -36,30 +36,43 @@ class WalletAPIView(APIView, ResponseMixin):
             
             try:
                 palm_req = generate_palmpay_account(request)
-                print("*" * 13, '\n')
                 print(palm_req)
-                print("*" * 13, '\n')
             except:
                 pass
 
-            supabase = request.supabase_client
+            supabase: Client = request.supabase_client
 
-            response = supabase.table('wallet').select('*').eq('user', user.id).single().execute()
+            response = supabase.table('wallet').select('*').eq('user', user.id).execute()
 
-            payload = {
-                'balance': response.data.get('balance'),
-                'cashback_balance': response.data.get('cashback_balance'),
-                'data_bonus': format_data_amount(response.data.get('cashback_balance')),
-            }
-            
+            wallet_data = response.data[0] if response.data else None
+
             if not response.data:
-                return self.response(
-                    error={"detail": "Wallet not found"},
-                    message="Wallet not found",
-                    status_code=status.HTTP_404_NOT_FOUND
-                )
+                insert_response = supabase.table('wallet').insert({
+                    'user': user.id,
+                    'balance': 0.0,
+                    'cashback_balance': 0.0
+                }).execute()
+                
+                if insert_response.data:
+                    wallet_data = insert_response.data[0]
+                else:
+                    return self.response(
+                        error={"detail": "Failed to create wallet"},
+                        message="Failed to create wallet",
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
 
-            wallet = response.data
+            cashback_balance = wallet_data.get('cashback_balance', 0.0) if wallet_data else None
+
+            if cashback_balance is None:
+                cashback_balance = 0.0
+            
+            payload = {
+                'balance': wallet_data.get('balance', 0.0) if wallet_data else 0.0,
+                'cashback_balance': cashback_balance,
+                'data_bonus': format_data_amount(cashback_balance),
+            }
+
             return self.response(
                 data=payload,
                 status_code=status.HTTP_200_OK,
