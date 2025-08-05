@@ -1,6 +1,5 @@
 import requests
-from typing import Any, Optional, TypedDict
-from supabase import Client
+from typing import Any
 
 def generate_palmpay_account(request: Any):
     """

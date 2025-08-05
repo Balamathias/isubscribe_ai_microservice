@@ -36,6 +36,7 @@ class WalletAPIView(APIView, ResponseMixin):
             
             try:
                 palm_req = generate_palmpay_account(request)
+                
                 print(palm_req)
             except:
                 pass
@@ -1165,7 +1166,7 @@ class GenerateReservedAccountView(APIView, ResponseMixin):
 
             supabase = request.supabase_client
 
-            response = supabase.table('accounts')\
+            response = supabase.table('account')\
                 .select('*')\
                 .eq('user', user.id)\
                 .single()\
