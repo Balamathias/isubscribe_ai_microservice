@@ -1012,7 +1012,7 @@ class RatingsView(APIView, ResponseMixin):
         try:
             supabase = request.supabase_client
 
-            limit = int(request.query_params.get('limit', 20))
+            limit = int(request.query_params.get('limit', 50))
             offset = int(request.query_params.get('offset', 0))
 
             response = supabase.table('ratings')\
