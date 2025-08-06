@@ -975,7 +975,7 @@ class RatingsView(APIView, ResponseMixin):
                 'user_id': user.id,
                 'rating': rating,
                 'comment': comment,
-                'status': 'active'
+                'status': 'published'
             }
 
             response = supabase.table('ratings').insert(data).execute()
