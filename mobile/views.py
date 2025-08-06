@@ -1016,7 +1016,7 @@ class RatingsView(APIView, ResponseMixin):
             offset = int(request.query_params.get('offset', 0))
 
             response = supabase.table('ratings')\
-                .select('*')\
+                .select('*, profile (*)')\
                 .eq('status', 'published')\
                 .order('created_at', desc=True)\
                 .range(offset, offset + limit - 1)\
