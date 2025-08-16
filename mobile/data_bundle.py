@@ -200,7 +200,7 @@ def process_data_bundle(request: Any):
             return {'error': 'Invalid amount'}
 
         if method == 'cashback' and amount > 1000:
-            raise ValueError(f'You cannot purchase a plan above N 1,000 with Data Bonus at a time.')
+            raise ValueError(f'You cannot purchase a plan above N 1,000 with Isubscribe Points at a time.')
             
         return_cashback = (amount * CASHBACK_VALUE)
             
@@ -324,8 +324,8 @@ def process_data_bundle(request: Any):
             
             return_cashback = (amount * CASHBACK_VALUE)
 
-            payload['title'] = 'Data Bonus'
-            payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
+            payload['title'] = 'Isubscribe Points'
+            payload['description'] = f'You have successfully received isubscribe Points of {format_data_amount(return_cashback)}.'
             payload['amount'] = return_cashback
             payload['type'] = 'cashback'
             payload['meta_data'] = {
@@ -467,9 +467,9 @@ def process_data_bundle(request: Any):
 
             if response.get('status') == 'success':
 
-                payload['title'] = 'Data Bonus'
+                payload['title'] = 'Isubscribe Points'
                 payload['status'] = 'success'
-                payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
+                payload['description'] = f'You have successfully received isubscribe Points of {format_data_amount(return_cashback)}.'
                 payload['amount'] = return_cashback
                 payload['type'] = 'cashback'
                 payload['meta_data'] = {
@@ -604,8 +604,8 @@ def process_data_bundle(request: Any):
             if not history_response.data:
                 raise Exception("Failed to insert transaction history")
 
-            payload['title'] = 'Data Bonus'
-            payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
+            payload['title'] = 'Isubscribe Points'
+            payload['description'] = f'You have successfully received isubscribe Points of {format_data_amount(return_cashback)}.'
             payload['amount'] = return_cashback
             payload['type'] = 'cashback'
             payload['transaction_id'] = content.get('transactions', {}).get('transactionId', '')

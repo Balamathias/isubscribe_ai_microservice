@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from mobile.airtime import VTPASS_API_KEY, VTPASS_BASE_URL, VTPASS_SECRET_KEY
 from pytypes.vtpass import VTPassTransactionResponse, MerchantVerifyResponse
 from mobile.response_code import RESPONSE_CODES
-from utils import CASHBACK_VALUE
+from utils import CASHBACK_VALUE, format_data_amount
 
 load_dotenv()
 
@@ -348,7 +348,7 @@ def process_education(request: Any):
         
         # Update metadata with results
         payload['meta_data'].update({
-            'cashback_bonus': bonus_cashback,
+            'data_bonus': bonus_cashback,
             'pins': pins,
             'cards': cards,
             'purchased_code': purchased_code
@@ -365,8 +365,8 @@ def process_education(request: Any):
         
         # Insert cashback bonus transaction
         cashback_payload = {
-            'title': 'Cashback Bonus',
-            'description': f'Cashback bonus of ₦{bonus_cashback:.2f} for education service purchase',
+            'title': 'Isubscribe Points',
+            'description': f'Isubscribe Points of {format_data_amount(bonus_cashback)} for education service purchase',
             'user': request.user.id,
             'amount': bonus_cashback,
             'provider': 'vtpass',
@@ -387,7 +387,7 @@ def process_education(request: Any):
             'success': True,
             'data': {
                 **history_response.data[0],
-                'cashback_bonus': bonus_cashback,
+                'data_bonus': bonus_cashback,
                 'pins': pins,
                 'cards': cards
             }

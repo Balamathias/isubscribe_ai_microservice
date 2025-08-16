@@ -16,6 +16,8 @@ redis = upstash_redis.Redis(
 
 DATA_MB_PER_NAIRA = 3.414
 
+ISUBSCRIBE_POINTS_PER_NAIRA = 3.415
+
 CASHBACK_VALUE = 0.01
 
 API_KEY = os.getenv('VERIPHONE_API_KEY')
@@ -33,13 +35,8 @@ def format_data_amount(amount: float | int) -> str:
     """
     amount = amount * DATA_MB_PER_NAIRA
 
-    if amount <= 1.024:
-        return f"{amount:.2f} MB"
-    elif 1 < amount <= 1024:
-        return f"{amount:.2f} MB"
-    else:
-        return f"{(amount/1000):.2f} GB"
-
+    return f"{amount:.2f} ISP"
+    
 
 Networks = Literal['mtn', 'glo', 'airtel', '9mobile']
 

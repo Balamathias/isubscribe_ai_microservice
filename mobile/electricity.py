@@ -296,7 +296,7 @@ def process_electricity(request: Any):
             token = ''.join(filter(str.isdigit, token))
         
         payload['meta_data'] = { 
-            'cashback_bonus': bonus_cashback,
+            'data_bonus': bonus_cashback,
             'meter_number': billers_code,
             'service': service_id,
             'variation_code': variation_code,
@@ -313,12 +313,12 @@ def process_electricity(request: Any):
         if not history_response.data:
             raise Exception("Failed to insert transaction history")
 
-        payload['title'] = 'Cashback Bonus'
-        payload['description'] = f'You have successfully received a cashback bonus of ₦{bonus_cashback:.2f}.'
+        payload['title'] = 'Isubscribe Points'
+        payload['description'] = f'You have successfully received isubscribe Points of {format_data_amount(bonus_cashback)}.'
         payload['amount'] = bonus_cashback
         payload['type'] = 'cashback'
         payload['meta_data'] = { 
-            'cashback_bonus': bonus_cashback,
+            'data_bonus': bonus_cashback,
             'meter_number': billers_code,
             'service': service_id,
             'variation_code': variation_code,
@@ -336,7 +336,7 @@ def process_electricity(request: Any):
             'success': True,
             'data': {
                 **history_response.data[0],
-                'cashback_bonus': bonus_cashback,
+                'data_bonus': bonus_cashback,
                 'token': token,
                 'formatted_token': format_token(token)
             }

@@ -481,6 +481,7 @@ class ListDataPlansView(APIView, ResponseMixin):
             
             super_plans = [{
                 **plan,
+                'data_bonus_price': format_data_amount(plan.get('price', 0)),
                 'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE)
             } for plan in super_plans.data]
             
@@ -492,7 +493,8 @@ class ListDataPlansView(APIView, ResponseMixin):
             best_plans = [{
                 **plan,
                 'price': plan.get('price', 0) + plan.get('commission', 0), # This has to be done for DB commissioning
-                'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE)
+                'data_bonus_price': format_data_amount(plan.get('price', 0) + plan.get('commission', 0)),
+                'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE),
             } for plan in best_plans.data]
 
             regular_plans = supabase.table('vtpass')\
@@ -503,6 +505,7 @@ class ListDataPlansView(APIView, ResponseMixin):
             regular_plans = [{
                 **plan,
                 'price': plan.get('price', 0) + plan.get('commission', 0), # This has to be done for DB commissioning
+                'data_bonus_price': format_data_amount(plan.get('price', 0) + plan.get('commission', 0)),
                 'data_bonus': format_data_amount(plan.get('price', 0) * CASHBACK_VALUE)
             } for plan in regular_plans.data]
             
