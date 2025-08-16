@@ -698,6 +698,11 @@ class AppConfig(APIView, ResponseMixin):
                 .select('*')\
                 .execute()
             
+            current_date = datetime.datetime.now()
+            year = current_date.year % 100
+            month = current_date.month
+            app_version = f"{year}.{month}"
+            
             config_map = {
                 'jamb_price': {'default': 0.0, 'type': float},
                 'waec_price': {'default': 0.0, 'type': float},
@@ -706,6 +711,7 @@ class AppConfig(APIView, ResponseMixin):
                 'update_available': {'default': False, 'type': lambda x: x.lower() == 'true'},
                 'update_url': {'default': '', 'type': str},
                 'update_message': {'default': '', 'type': str},
+                'app_version': { 'default': app_version, 'type': str}
             }
 
             config_values = {}
@@ -720,14 +726,8 @@ class AppConfig(APIView, ResponseMixin):
                 else:
                     config_values[name] = config['default']
 
-            current_date = datetime.datetime.now()
-            year = current_date.year % 100
-            month = current_date.month
-            app_version = f"{year}.{month}"
-
             payload = {
                 'app_name': 'isubscribe',
-                'app_version': app_version,
                 'support_email': 'support@isubscribe.com',
                 'support_phone': '+2347049597498',
                 **config_values,
