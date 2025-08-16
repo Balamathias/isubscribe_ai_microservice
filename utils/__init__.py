@@ -36,12 +36,12 @@ def format_data_amount(amount: float | int) -> str:
     amount = amount * DATA_MB_PER_NAIRA
 
     if amount <= 1.024:
-        return f"{amount:.2f} MB"
+        return f"{amount:.2f}MB"
     elif 1 < amount <= 1024:
-        return f"{amount:.2f} MB"
+        return f"{amount:.2f}MB"
     else:
-        return f"{(amount/1000):.2f} GB"
-    
+        return f"{(amount/1000):.2f}GB"
+
 
 Networks = Literal['mtn', 'glo', 'airtel', '9mobile']
 
