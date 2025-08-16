@@ -365,8 +365,8 @@ def process_education(request: Any):
         
         # Insert cashback bonus transaction
         cashback_payload = {
-            'title': 'Isubscribe Points',
-            'description': f'Isubscribe Points of {format_data_amount(bonus_cashback)} for education service purchase',
+            'title': 'Data Bonus',
+            'description': f'Data Bonus of {format_data_amount(bonus_cashback)} for education service purchase',
             'user': request.user.id,
             'amount': bonus_cashback,
             'provider': 'vtpass',

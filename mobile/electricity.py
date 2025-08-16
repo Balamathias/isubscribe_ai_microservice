@@ -313,8 +313,8 @@ def process_electricity(request: Any):
         if not history_response.data:
             raise Exception("Failed to insert transaction history")
 
-        payload['title'] = 'Isubscribe Points'
-        payload['description'] = f'You have successfully received isubscribe Points of {format_data_amount(bonus_cashback)}.'
+        payload['title'] = 'Data Bonus'
+        payload['description'] = f'You have successfully received data Bonus of {format_data_amount(bonus_cashback)}.'
         payload['amount'] = bonus_cashback
         payload['type'] = 'cashback'
         payload['meta_data'] = { 
