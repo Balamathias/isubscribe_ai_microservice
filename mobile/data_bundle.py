@@ -466,9 +466,18 @@ def process_data_bundle(request: Any):
             return_cashback = (amount * CASHBACK_VALUE)
 
             if response.get('status') == 'success':
+                
+                payload['status'] = 'success'
+
+                history_response = supabase.table('history')\
+                    .update(payload)\
+                    .eq('id', tx_response.data[0].get('id'))\
+                    .execute()
+                
+                if not history_response.data:
+                    raise Exception("Failed to insert transaction history")
 
                 payload['title'] = 'Data Bonus'
-                payload['status'] = 'success'
                 payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
                 payload['amount'] = return_cashback
                 payload['type'] = 'cashback'
