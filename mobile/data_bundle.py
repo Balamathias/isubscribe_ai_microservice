@@ -447,7 +447,7 @@ def process_data_bundle(request: Any):
         if response and response.get('status') in ['success', 'pending']:
 
             payload['amount'] = amount
-            payload['description'] = f'Data plan for {phone} is being processed.'
+            payload['description'] = f'Data plan for {phone} has been processed successfully.'
             payload['balance_after'] = (balance - amount) if payment_method == 'wallet' else None
             payload['transaction_id'] = response.get('request-id', None)
             payload['commission'] = data_plan.get('commission')
