@@ -312,7 +312,13 @@ def process_data_bundle(request: Any):
             payload['description'] = f'You have successfully topped up {data_plan.get('quantity')} for {phone}.'
             payload['balance_after'] = (balance - amount) if payment_method == 'wallet' else None
             payload['transaction_id'] = response.get('transactionID', None)
-            payload['commission'] = data_plan.get('commission')
+
+            additional_commission = max(
+                0.0,
+                float(response.get('amount', 0) or 0) - float(response.get('amountPaid', 0) or 0),
+            )
+            
+            payload['commission'] = float(data_plan.get('commission', 0) or 0) + additional_commission
 
             history_response = supabase.table('history')\
                 .update(payload)\
