@@ -474,6 +474,13 @@ def process_data_bundle(request: Any):
             if response.get('status') == 'success':
                 
                 payload['status'] = 'success'
+                
+                payload['meta_data'] = {
+                    **data_plan,
+                    'data_bonus': format_data_amount(return_cashback),
+                    'phone': phone,
+                    'network': data_plan.get('network')
+                }
 
                 history_response = supabase.table('history')\
                     .update(payload)\
@@ -487,12 +494,6 @@ def process_data_bundle(request: Any):
                 payload['description'] = f'You have successfully received a data bonus of {format_data_amount(return_cashback)}.'
                 payload['amount'] = return_cashback
                 payload['type'] = 'cashback'
-                payload['meta_data'] = {
-                    **data_plan,
-                    'data_bonus': format_data_amount(return_cashback),
-                    'phone': phone,
-                    'network': data_plan.get('network')
-                }
 
                 cashback_response = supabase.table('history')\
                     .insert(payload)\
