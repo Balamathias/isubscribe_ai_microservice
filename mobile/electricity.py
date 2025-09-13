@@ -326,7 +326,10 @@ def process_electricity(request: Any):
         }
 
         cashback_response = supabase.table('history')\
-            .insert(payload)\
+            .insert({
+                **payload,
+                'commission': 0.0 # No commission on cashback to prevent double counting
+            })\
             .execute()
         
         if not cashback_response.data:
