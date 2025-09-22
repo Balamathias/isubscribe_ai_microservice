@@ -869,3 +869,204 @@ class AdminReportsViewSet(ViewSet, ResponseMixin):
                 message="Failed to export data",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AdminPlansViewSet(ViewSet, ResponseMixin):
+    """
+    Unified CRUD for data plans across categories: gsub (Best), n3t (Super), vtpass (Regular)
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    TABLES = {
+        'gsub': 'gsub_data_plans',
+        'n3t': 'n3t_super_plans',
+        'vtpass': 'vtpass_regular_plans',
+    }
+    SELECT_FIELDS = 'id, network, name, quantity, duration, price, commission, active'
+
+    def _normalize(self, row: dict, category: str) -> dict:
+        price = float(row.get('price') or 0)
+        commission = float(row.get('commission') or 0)
+        if category == 'n3t':
+            base_price = max(price - commission, 0)
+            final_price = price
+        else:
+            base_price = price
+            final_price = price + commission
+        return {
+            'id': row.get('id'),
+            'category': category,
+            'network': row.get('network'),
+            'name': row.get('name'),
+            'quantity': row.get('quantity'),
+            'duration': row.get('duration'),
+            'base_price': base_price,
+            'commission': commission,
+            'final_price': final_price,
+            'active': row.get('active', True),
+        }
+
+    def list(self, request):
+        try:
+            category = (request.query_params.get('category') or 'all').lower()
+            search = (request.query_params.get('search') or '').strip()
+            network = (request.query_params.get('network') or '').strip()
+            limit = int(request.query_params.get('limit') or 50)
+            offset = int(request.query_params.get('offset') or 0)
+
+            categories = [category] if category in self.TABLES else list(self.TABLES.keys())
+            items = []
+
+            for cat in categories:
+                table = self.TABLES[cat]
+                q = supabase.table(table).select(self.SELECT_FIELDS)
+                if network:
+                    q = q.ilike('network', f'%{network}%')
+                if search:
+                    q = q.or_(
+                        f"name.ilike.%{search}%,quantity.ilike.%{search}%,duration.ilike.%{search}%,network.ilike.%{search}%"
+                    )
+                data = q.execute().data or []
+                items.extend([self._normalize(r, cat) for r in data])
+
+            total = len(items)
+            items.sort(key=lambda x: (str(x.get('network') or ''), str(x.get('quantity') or '')))
+            items = items[offset: offset + limit]
+
+            return self.response(data=items, count=total, status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error listing plans')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to list plans",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def create(self, request):
+        try:
+            payload = request.data or {}
+            category = (payload.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            table = self.TABLES[category]
+
+            base_price = float(payload.get('base_price') or 0)
+            commission = float(payload.get('commission') or 0)
+
+            to_insert = {
+                'network': payload.get('network'),
+                'name': payload.get('name'),
+                'quantity': payload.get('quantity'),
+                'duration': payload.get('duration'),
+                'active': bool(payload.get('active', True)),
+            }
+
+            if category == 'n3t':
+                to_insert['price'] = base_price + commission
+                to_insert['commission'] = commission
+            else:
+                to_insert['price'] = base_price
+                to_insert['commission'] = commission
+
+            result = supabase.table(table).insert(to_insert).execute()
+            row = (result.data or [None])[0]
+            if not row:
+                return self.response(
+                    error={"detail": "Failed to create plan"},
+                    message="Failed to create plan",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            return self.response(data=self._normalize(row, category), status_code=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.exception('Error creating plan')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to create plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def partial_update(self, request, pk=None):
+        return self.update(request, pk)
+
+    def update(self, request, pk=None):
+        try:
+            payload = request.data or {}
+            category = (payload.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if not pk:
+                return self.response(
+                    error={"detail": "Missing id"},
+                    message="Missing id",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            table = self.TABLES[category]
+            to_update = {}
+            for k in ['network', 'name', 'quantity', 'duration', 'active']:
+                if k in payload:
+                    to_update[k] = payload[k]
+
+            if 'base_price' in payload or 'commission' in payload:
+                bp = float(payload.get('base_price') or 0)
+                cm = float(payload.get('commission') or 0)
+                if category == 'n3t':
+                    to_update['price'] = bp + cm
+                    to_update['commission'] = cm
+                else:
+                    to_update['price'] = bp
+                    to_update['commission'] = cm
+
+            result = supabase.table(table).update(to_update).eq('id', pk).execute()
+            row = (result.data or [None])[0]
+            if not row:
+                return self.response(
+                    error={"detail": "Failed to update plan"},
+                    message="Failed to update plan",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            return self.response(data=self._normalize(row, category), status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error updating plan')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to update plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def destroy(self, request, pk=None):
+        try:
+            category = (request.query_params.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if not pk:
+                return self.response(
+                    error={"detail": "Missing id"},
+                    message="Missing id",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            table = self.TABLES[category]
+            supabase.table(table).delete().eq('id', pk).execute()
+            return self.response(message='Deleted', status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error deleting plan')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to delete plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

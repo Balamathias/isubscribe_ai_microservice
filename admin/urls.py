@@ -21,7 +21,8 @@ from .views import (
     AdminSystemViewSet,
     AdminUserManagementViewSet,
     AdminTransactionViewSet,
-    AdminReportsViewSet
+    AdminReportsViewSet,
+    AdminPlansViewSet
 )
 
 app_name = 'admin'
@@ -34,6 +35,7 @@ router.register(r'system', AdminSystemViewSet, basename='system')
 router.register(r'users', AdminUserManagementViewSet, basename='users')
 router.register(r'transactions', AdminTransactionViewSet, basename='transactions')
 router.register(r'reports', AdminReportsViewSet, basename='reports')
+router.register(r'plans', AdminPlansViewSet, basename='plans')
 
 urlpatterns = [
     # Include all router URLs
