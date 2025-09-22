@@ -885,7 +885,6 @@ class AdminPlansViewSet(ViewSet, ResponseMixin):
         'vtpass': 'vtpass',
     }
     
-    # Common fields available in all tables
     COMMON_FIELDS = 'id, network, name, quantity, duration, price, commission, is_active, is_hidden, service_id, value'
     
     # Fields that exist in gsub and vtpass but not n3t
@@ -974,6 +973,8 @@ class AdminPlansViewSet(ViewSet, ResponseMixin):
     def create(self, request):
         try:
             payload = request.data or {}
+            logger.info(f"Create plan payload: {payload}")
+            
             category = (payload.get('category') or '').lower()
             if category not in self.TABLES:
                 return self.response(
@@ -983,31 +984,70 @@ class AdminPlansViewSet(ViewSet, ResponseMixin):
                 )
             table = self.TABLES[category]
 
-            base_price = float(payload.get('base_price') or 0)
-            commission = float(payload.get('commission') or 0)
+            # Convert string numbers to proper floats
+            try:
+                base_price = float(str(payload.get('base_price', 0)).replace(',', ''))
+                commission = float(str(payload.get('commission', 0)).replace(',', ''))
+            except (ValueError, TypeError):
+                base_price = 0.0
+                commission = 0.0
 
-            # Common fields for all categories
-            to_insert = {
-                'network': payload.get('network'),
-                'name': payload.get('name'),
-                'quantity': payload.get('quantity'),
-                'duration': payload.get('duration'),
-                'is_active': bool(payload.get('is_active', True)),
-                'is_hidden': bool(payload.get('is_hidden', False)),
-                'service_id': payload.get('service_id'),
-                'value': payload.get('value'),
+            allowed_fields = {
+                'gsub': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value'],
+                'n3t': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value', 'cash_back', 'profit'],
+                'vtpass': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value']
             }
+            
+            to_insert = {}
+            
+            to_insert['network'] = str(payload.get('network', '')).strip()
+            to_insert['quantity'] = str(payload.get('quantity', '')).strip()
+            to_insert['duration'] = str(payload.get('duration', '')).strip()
+                
+            name = str(payload.get('name', '')).strip()
+            if name:
+                to_insert['name'] = name
 
-            # Category-specific field handling
+            to_insert['is_active'] = bool(payload.get('is_active', True))
+            to_insert['is_hidden'] = bool(payload.get('is_hidden', False))
+
+            service_id = str(payload.get('service_id', '')).strip()
+            if service_id and service_id.lower() not in ['none', '']:
+                to_insert['service_id'] = service_id
+            
+            value = str(payload.get('value', '')).strip()
+            if value and value.lower() not in ['none', '']:
+                to_insert['value'] = value
+
             if category == 'n3t':
-                to_insert['price'] = base_price + commission  # n3t stores final price
-                to_insert['commission'] = commission
-                to_insert['cash_back'] = float(payload.get('cash_back') or 0)
-                to_insert['profit'] = float(payload.get('profit') or 0)
+                # n3t stores final price (base + commission)
+                to_insert['price'] = max(0, int(round(base_price + commission)))
+                to_insert['commission'] = max(0, int(round(commission)))
+                
+                # n3t specific fields
+                if 'cash_back' in allowed_fields[category]:
+                    try:
+                        cash_back = float(str(payload.get('cash_back', 0)).replace(',', ''))
+                        to_insert['cash_back'] = max(0, int(round(cash_back)))
+                    except (ValueError, TypeError):
+                        to_insert['cash_back'] = 0
+                        
+                if 'profit' in allowed_fields[category]:
+                    try:
+                        profit = float(str(payload.get('profit', 0)).replace(',', ''))
+                        to_insert['profit'] = max(0, int(round(profit)))
+                    except (ValueError, TypeError):
+                        to_insert['profit'] = 0
             else:
                 # gsub and vtpass store base price
-                to_insert['price'] = base_price
-                to_insert['commission'] = commission
+                to_insert['price'] = max(0, int(round(base_price)))
+                to_insert['commission'] = max(0, int(round(commission)))
+
+            # Final filter - only keep allowed fields for this table
+            filtered_insert = {k: v for k, v in to_insert.items() if k in allowed_fields.get(category, [])}
+            to_insert = filtered_insert
+
+            logger.info(f"Final insert data for {table}: {to_insert}")  # Debug log
 
             result = supabase.table(table).insert(to_insert).execute()
             row = (result.data or [None])[0]
@@ -1019,7 +1059,7 @@ class AdminPlansViewSet(ViewSet, ResponseMixin):
                 )
             return self.response(data=self._normalize(row, category), status_code=status.HTTP_201_CREATED)
         except Exception as e:
-            logger.exception('Error creating plan')
+            logger.exception(f'Error creating plan: {str(e)}')
             return self.response(
                 error={"detail": str(e)},
                 message="Failed to create plan",
@@ -1049,28 +1089,28 @@ class AdminPlansViewSet(ViewSet, ResponseMixin):
             table = self.TABLES[category]
             to_update = {}
             
-            # Common fields for all categories
             for k in ['network', 'name', 'quantity', 'duration', 'is_active', 'is_hidden', 'service_id', 'value']:
                 if k in payload:
                     to_update[k] = payload[k]
 
-            # Handle pricing fields
             if 'base_price' in payload or 'commission' in payload:
                 bp = float(payload.get('base_price') or 0)
                 cm = float(payload.get('commission') or 0)
                 if category == 'n3t':
-                    to_update['price'] = bp + cm  # n3t stores final price
-                    to_update['commission'] = cm
+                    to_update['price'] = int(bp + cm)  # n3t stores final price as integer
+                    to_update['commission'] = int(cm)
                 else:
-                    to_update['price'] = bp  # gsub/vtpass store base price
-                    to_update['commission'] = cm
+                    to_update['price'] = int(bp)  # gsub/vtpass store base price as integer
+                    to_update['commission'] = int(cm)
 
-            # Handle n3t-specific fields
+            # Handle n3t-specific fields with proper type conversion
             if category == 'n3t':
                 if 'cash_back' in payload:
-                    to_update['cash_back'] = float(payload.get('cash_back') or 0)
+                    cash_back = float(payload.get('cash_back') or 0)
+                    to_update['cash_back'] = int(cash_back)
                 if 'profit' in payload:
-                    to_update['profit'] = float(payload.get('profit') or 0)
+                    profit = float(payload.get('profit') or 0)
+                    to_update['profit'] = int(profit)
 
             result = supabase.table(table).update(to_update).eq('id', pk).execute()
             row = (result.data or [None])[0]
