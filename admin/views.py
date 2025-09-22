@@ -33,6 +33,7 @@ import logging
 import csv
 import io
 
+from mobile.notifications import send_push_notification, send_bulk_push_notifications
 from utils.response import ResponseMixin
 from .services import (
     UserAnalyticsService,
@@ -59,10 +60,8 @@ class AdminDashboardViewSet(ViewSet, ResponseMixin):
     """
     Main admin dashboard providing overview metrics and quick insights
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     def list(self, request):
         """
@@ -85,7 +84,7 @@ class AdminDashboardViewSet(ViewSet, ResponseMixin):
             
             # Recent activities (latest transactions)
             recent_activities = supabase.table('history').select(
-                'id, user, email, type, amount, status, created_at, description'
+                'id, user, email, type, amount, status, created_at, description', 'profile (username, email, full_name)'
             ).order('created_at', desc=True).limit(10).execute()
             
             dashboard_data = {
@@ -136,10 +135,8 @@ class AdminAnalyticsViewSet(ViewSet, ResponseMixin):
     """
     Comprehensive analytics endpoints for different aspects of the platform
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     @action(detail=False, methods=['get'])
     def users(self, request):
@@ -278,10 +275,8 @@ class AdminSystemViewSet(ViewSet, ResponseMixin):
     """
     System monitoring and health check endpoints
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     @action(detail=False, methods=['get'])
     def health(self, request):
@@ -317,10 +312,8 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
     """
     User management endpoints for admin operations
     """
-    # authentication_classes = [AdminSupabaseAuthentication]
-    # permission_classes = [CanViewAnalytics]
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [AdminSupabaseAuthentication]
+    permission_classes = [CanViewAnalytics]
     
     def list(self, request):
         """
@@ -521,6 +514,7 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
             
             action = request.data.get('action')
             reason = request.data.get('reason', 'Admin action')
+            pin = request.data.get('pin')
             
             if not action:
                 return self.response(
@@ -539,7 +533,20 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
                 )
             
             result = {}
-            
+
+            saved_pin: str | None = (supabase.table('profile').select('pin').eq('id', request.user.id).single().execute()).data.get('pin')
+
+            from mobile.bcrypt import verify_pin
+
+            is_pin_valid = verify_pin(pin, saved_pin) if (pin and saved_pin) else False
+
+            if not is_pin_valid:
+                return self.response(
+                    error={"detail": "Invalid PIN"},
+                    message="Invalid PIN",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
             if action == 'suspend':
                 # Update user role to suspended (you might want to add a status field)
                 update_response = supabase.table('profile').update({
@@ -569,7 +576,6 @@ class AdminUserManagementViewSet(ViewSet, ResponseMixin):
                 adjust_response = supabase.rpc('modify_wallet_balance', {
                     'user_id': pk,
                     'amount': float(amount),
-                    'new_cashback_balance': 0  # Keep cashback unchanged
                 }).execute()
                 
                 result = {"message": f"Balance adjusted by {amount}", "new_balance": amount}
@@ -630,6 +636,8 @@ class AdminTransactionViewSet(ViewSet, ResponseMixin):
     """
     authentication_classes = [AdminSupabaseAuthentication]
     permission_classes = [CanViewFinancials]
+    # authentication_classes = []
+    # permission_classes = []
     
     def list(self, request):
         """
@@ -661,7 +669,7 @@ class AdminTransactionViewSet(ViewSet, ResponseMixin):
             user_id = request.query_params.get('user_id')
             
             # Build query
-            query = supabase.table('history').select('*')
+            query = supabase.table('history').select('*, profile (email, full_name)')
             
             # Apply filters
             if search:
@@ -701,8 +709,26 @@ class AdminTransactionViewSet(ViewSet, ResponseMixin):
                 offset, offset + limit - 1
             ).execute()
             
+            processed_transactions = []
+            if transactions_response.data:
+                for transaction in transactions_response.data:
+                    if 'meta_data' in transaction and transaction['meta_data']:
+                        import json
+
+                        if isinstance(transaction['meta_data'], str):
+                            try:
+                                transaction['meta_data'] = json.loads(transaction['meta_data'])
+                            except (json.JSONDecodeError, ValueError):
+                                transaction['meta_data'] = {}
+                        elif not isinstance(transaction['meta_data'], dict):
+                            transaction['meta_data'] = {}
+                    else:
+                        transaction['meta_data'] = {}
+                    
+                    processed_transactions.append(transaction)
+            
             return self.response(
-                data=transactions_response.data if transactions_response.data else [],
+                data=processed_transactions,
                 count=total_count,
                 next=offset + limit if offset + limit < total_count else None,
                 previous=offset - limit if offset > 0 else None,

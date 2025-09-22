@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from django.db.models import Count, Sum, Avg, Q
-from services.supabase import superbase as supabase
+from services.supabase import supabase
 import logging
 
 logger = logging.getLogger(__name__)
@@ -89,8 +89,13 @@ class UserAnalyticsService:
             if not registrations_response.data:
                 return []
             
-            df = pd.DataFrame(registrations_response.data)
-            df['created_at'] = pd.to_datetime(df['created_at'])
+            df = pd.DataFrame(registrations_response.data).copy()
+            df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
+            df = df.dropna(subset=['created_at'])
+            
+            if df.empty:
+                return []
+            
             df['date'] = df['created_at'].dt.date
             
             daily_counts = df.groupby('date').size().reset_index(name='count')
@@ -186,17 +191,7 @@ class FinancialAnalyticsService:
     
     @staticmethod
     def get_revenue_overview(start_date: str = None, end_date: str = None, days: int = 30) -> Dict[str, Any]:
-        """
-        Get comprehensive revenue overview and analytics
-        
-        Args:
-            start_date: Start date in ISO format (optional)
-            end_date: End date in ISO format (optional) 
-            days: Number of days to analyze if dates not provided
-            
-        Returns:
-            Dict containing revenue metrics and analytics
-        """
+        """Get comprehensive revenue overview and analytics"""
         try:
             if not start_date or not end_date:
                 end_dt = datetime.now()
@@ -223,14 +218,15 @@ class FinancialAnalyticsService:
                     "period_end": end_date
                 }
             
-            df = pd.DataFrame(transactions_response.data)
+            # Create DataFrame and make explicit copy
+            df = pd.DataFrame(transactions_response.data).copy()
             
             # Convert numeric columns
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0)
             df['commission'] = pd.to_numeric(df['commission'], errors='coerce').fillna(0)
             
             # Filter successful transactions for revenue calculations
-            successful_transactions = df[df['status'] == 'success']
+            successful_transactions = df[df['status'] == 'success'].copy()
             
             # Basic metrics
             total_revenue = successful_transactions['commission'].sum()
@@ -279,10 +275,22 @@ class FinancialAnalyticsService:
             if df.empty:
                 return []
                 
-            df['created_at'] = pd.to_datetime(df['created_at'])
-            df['date'] = df['created_at'].dt.date
+            # Create a copy to avoid SettingWithCopyWarning
+            df_copy = df.copy()
             
-            daily_stats = df.groupby('date').agg({
+            # Convert to datetime first, handling various formats
+            df_copy['created_at'] = pd.to_datetime(df_copy['created_at'], errors='coerce')
+            
+            # Remove any rows where datetime conversion failed
+            df_copy = df_copy.dropna(subset=['created_at'])
+            
+            if df_copy.empty:
+                return []
+            
+            # Now we can safely use .dt accessor
+            df_copy['date'] = df_copy['created_at'].dt.date
+            
+            daily_stats = df_copy.groupby('date').agg({
                 'commission': 'sum',
                 'amount': 'sum',
                 'type': 'count'
@@ -313,7 +321,8 @@ class FinancialAnalyticsService:
             if not wallets_response.data:
                 return {}
             
-            df = pd.DataFrame(wallets_response.data)
+            # Create explicit copy
+            df = pd.DataFrame(wallets_response.data).copy()
             df['balance'] = pd.to_numeric(df['balance'], errors='coerce').fillna(0)
             df['cashback_balance'] = pd.to_numeric(df['cashback_balance'], errors='coerce').fillna(0)
             
@@ -439,10 +448,17 @@ class TransactionAnalyticsService:
             if df.empty:
                 return {}
             
-            df['created_at'] = pd.to_datetime(df['created_at'])
-            df['hour'] = df['created_at'].dt.hour
+            # Create a copy and safely convert to datetime
+            df_copy = df.copy()
+            df_copy['created_at'] = pd.to_datetime(df_copy['created_at'], errors='coerce')
+            df_copy = df_copy.dropna(subset=['created_at'])
             
-            hourly_counts = df.groupby('hour').size().to_dict()
+            if df_copy.empty:
+                return {}
+            
+            df_copy['hour'] = df_copy['created_at'].dt.hour
+            
+            hourly_counts = df_copy.groupby('hour').size().to_dict()
             
             # Fill missing hours with 0
             hourly_pattern = {str(hour): hourly_counts.get(hour, 0) for hour in range(24)}

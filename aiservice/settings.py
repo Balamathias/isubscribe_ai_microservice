@@ -46,6 +46,9 @@ CSRF_COOKIE_SAMESITE = 'None'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://isubscribe-ai-microservice.onrender.com",
+    "https://admin.isubscribe.ng",
+    "https://isubscribe.ng",
 ]
 
 

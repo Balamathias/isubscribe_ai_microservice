@@ -43,6 +43,7 @@ urlpatterns = [
     
     # Additional custom endpoints can be added here
     # path('custom-endpoint/', CustomView.as_view(), name='custom-endpoint'),
+    path('push-tokens/', AdminPushTokenView.as_view(), name='push-tokens'),
 ]
 
 """
