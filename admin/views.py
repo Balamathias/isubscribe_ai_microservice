@@ -895,490 +895,289 @@ class AdminReportsViewSet(ViewSet, ResponseMixin):
                 message="Failed to export data",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
-
-@method_decorator(csrf_exempt, name='dispatch')
-class AdminPushTokenView(APIView, ResponseMixin):
-    """
-    Push token management endpoints for admin operations
-    """
-    authentication_classes = [AdminSupabaseAuthentication]
-    permission_classes = []
-    
-    def get(self, request):
-        """
-        GET /admin/push-tokens/
-        
-        Query params:
-        - limit: Number of tokens to return (default: 50)
-        - offset: Number of tokens to skip (default: 0)
-        - user_id: Filter by specific user ID
-        - active: Filter by active status (true/false)
-        
-        Returns paginated list of push tokens with user information
-        """
-        try:
-            limit = int(request.query_params.get('limit', 50))
-            offset = int(request.query_params.get('offset', 0))
-            user_id = request.query_params.get('user_id')
-            active = request.query_params.get('active')
-            
-            query = supabase.table('push_tokens').select(
-                'id, token, user, active, created_at'
-            )
-            
-            if user_id:
-                query = query.eq('user', user_id)
-            
-            if active is not None:
-                query = query.eq('active', active.lower() == 'true')
-            
-            count_response = query.execute()
-            total_count = len(count_response.data) if count_response.data else 0
-            
-            tokens_response = query.order('created_at', desc=True).range(
-                offset, offset + limit - 1
-            ).execute()
-            
-            return self.response(
-                data=tokens_response.data,
-                count=total_count,
-                next=offset + limit if offset + limit < total_count else None,
-                previous=offset - limit if offset > 0 else None,
-                message="Push tokens retrieved successfully",
-                status_code=status.HTTP_200_OK
-            )
-            
-        except Exception as e:
-            logger.exception(f"Error in push token list: {str(e)}")
-            return self.response(
-                error={"detail": str(e)},
-                message="Failed to retrieve push tokens",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    def post(self, request):
-        """
-        POST /admin/push-tokens/
-        
-        Create or update push tokens for a user
-        
-        Request body:
-        {
-            "user_id": "uuid",
-            "token": "push_token",
-            "active": true|false
-        }
-        """
-        try:
-            user_id = request.data.get('user_id')
-            token = request.data.get('token')
-            active = request.data.get('active', True)
-            
-            if not user_id or not token:
-                return self.response(
-                    error={"detail": "User ID and token are required"},
-                    message="User ID and token are required",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            upsert_response = supabase.table('push_tokens').upsert({
-                'user': user_id,
-                'token': token,
-                'active': active
-            }).execute()
-            
-            return self.response(
-                data=upsert_response.data[0] if upsert_response.data else {},
-                message="Push token created/updated successfully",
-                status_code=status.HTTP_201_CREATED
-            )
-            
-        except Exception as e:
-            logger.exception(f"Error in push token create/update: {str(e)}")
-            return self.response(
-                error={"detail": str(e)},
-                message="Failed to create/update push token",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class AdminNotificationsViewSet(ViewSet, ResponseMixin):
+class AdminPlansViewSet(ViewSet, ResponseMixin):
     """
-    Push notification management endpoints for admin operations
+    Unified CRUD for data plans across categories: gsub (Best), n3t (Super), vtpass (Regular)
     """
-    authentication_classes = [AdminSupabaseAuthentication]
+    authentication_classes = []
     permission_classes = []
+
+    TABLES = {
+        'gsub': 'gsub',
+        'n3t': 'n3t',
+        'vtpass': 'vtpass',
+    }
     
-    @action(detail=False, methods=['post'], url_path='send-push')
-    def send_push(self, request):
-        """
-        POST /admin/notifications/send-push/
+    COMMON_FIELDS = 'id, network, name, quantity, duration, price, commission, is_active, is_hidden, service_id, value'
+    
+    # Fields that exist in gsub and vtpass but not n3t
+    TIMESTAMP_FIELDS = ', created_at'
+    
+    # N3T specific fields
+    N3T_EXTRA_FIELDS = ', cash_back, profit'
+
+    def _get_select_fields(self, category: str) -> str:
+        """Get appropriate select fields based on category"""
+        if category == 'n3t':
+            return self.COMMON_FIELDS + self.N3T_EXTRA_FIELDS
+        else:
+            return self.COMMON_FIELDS + self.TIMESTAMP_FIELDS
+
+    def _normalize(self, row: dict, category: str) -> dict:
+        price = float(row.get('price') or 0)
+        commission = float(row.get('commission') or 0)
         
-        Send push notifications to users:
-        - Single user by user_id
-        - Multiple users by user_ids list
-        - All users (broadcast)
-        - Users by role/criteria
-        
-        Request body:
-        {
-            "target_type": "single|multiple|broadcast|role",
-            "user_id": "uuid",  // For single user
-            "user_ids": ["uuid1", "uuid2"],  // For multiple users
-            "role": "user|admin",  // For role-based targeting
-            "title": "Notification title",
-            "body": "Notification message",
-            "data": {  // Optional custom data
-                "action": "open_screen",
-                "screen": "dashboard"
-            },
-            "priority": "normal|high",
-            "sound": "default",
-            "badge": 1
-        }
-        """
-        try:
-            target_type = request.data.get('target_type', 'single')
-            title = request.data.get('title')
-            body = request.data.get('body')
-            data = request.data.get('data', {})
-            badge = request.data.get('badge', 1)
+        if category == 'n3t':
+            # For n3t, price includes commission
+            base_price = max(price - commission, 0)
+            final_price = price
+        else:
+            # For gsub and vtpass, price is base price
+            base_price = price
+            final_price = price + commission
             
-            if not title or not body:
+        return {
+            'id': row.get('id'),
+            'category': category,
+            'network': row.get('network'),
+            'name': row.get('name'),
+            'quantity': row.get('quantity'),
+            'duration': row.get('duration'),
+            'base_price': base_price,
+            'commission': commission,
+            'final_price': final_price,
+            'is_active': row.get('is_active', True),
+            'is_hidden': row.get('is_hidden', False),
+            'service_id': row.get('service_id'),
+            'value': row.get('value'),
+            'created_at': row.get('created_at') if category != 'n3t' else None,  # n3t doesn't have created_at
+            # n3t specific fields
+            'cash_back': row.get('cash_back') if category == 'n3t' else None,
+            'profit': row.get('profit') if category == 'n3t' else None,
+        }
+
+    def list(self, request):
+        try:
+            category = (request.query_params.get('category') or 'all').lower()
+            search = (request.query_params.get('search') or '').strip()
+            network = (request.query_params.get('network') or '').strip()
+            limit = int(request.query_params.get('limit') or 50)
+            offset = int(request.query_params.get('offset') or 0)
+
+            categories = [category] if category in self.TABLES else list(self.TABLES.keys())
+            items = []
+
+            for cat in categories:
+                table = self.TABLES[cat]
+                select_fields = self._get_select_fields(cat)
+                q = supabase.table(table).select(select_fields)
+                if network:
+                    q = q.ilike('network', f'%{network}%')
+                if search:
+                    q = q.or_(
+                        f"name.ilike.%{search}%,quantity.ilike.%{search}%,duration.ilike.%{search}%,network.ilike.%{search}%"
+                    )
+                data = q.execute().data or []
+                items.extend([self._normalize(r, cat) for r in data])
+
+            total = len(items)
+            items.sort(key=lambda x: (str(x.get('network') or ''), str(x.get('quantity') or '')))
+            items = items[offset: offset + limit]
+
+            return self.response(data=items, count=total, status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error listing plans')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to list plans",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def create(self, request):
+        try:
+            payload = request.data or {}
+            logger.info(f"Create plan payload: {payload}")
+            
+            category = (payload.get('category') or '').lower()
+            if category not in self.TABLES:
                 return self.response(
-                    error={"detail": "Title and body are required"},
-                    message="Title and body are required",
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
-            
-            push_tokens = []
-            
-            if target_type == 'single':
-                user_id = request.data.get('user_id')
-                if not user_id:
-                    return self.response(
-                        error={"detail": "User ID is required for single user targeting"},
-                        message="User ID is required",
-                        status_code=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                tokens_response = supabase.table('push_tokens').select('token').eq('user', user_id).eq('active', True).execute()
-                push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
-                
-            elif target_type == 'multiple':
-                user_ids = request.data.get('user_ids', [])
-                if not user_ids:
-                    return self.response(
-                        error={"detail": "User IDs list is required for multiple user targeting"},
-                        message="User IDs are required",
-                        status_code=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                tokens_response = supabase.table('push_tokens').select('token').in_('user', user_ids).eq('active', True).execute()
-                push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
-                
-            elif target_type == 'broadcast':
-                tokens_response = supabase.table('push_tokens').select('token').eq('active', True).execute()
-                push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
-                
-            elif target_type == 'role':
-                role = request.data.get('role')
-                if not role:
-                    return self.response(
-                        error={"detail": "Role is required for role-based targeting"},
-                        message="Role is required",
-                        status_code=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                users_response = supabase.table('profile').select('id').eq('role', role).execute()
-                if users_response.data:
-                    user_ids = [user['id'] for user in users_response.data]
-                    tokens_response = supabase.table('push_tokens').select('token').in_('user', user_ids).eq('active', True).execute()
-                    push_tokens = [token['token'] for token in tokens_response.data if tokens_response.data]
-            
-            if not push_tokens:
-                return self.response(
-                    error={"detail": "No active push tokens found for the specified target"},
-                    message="No recipients found",
-                    status_code=status.HTTP_404_NOT_FOUND
-                )
-            
-            successful_sends = 0
-            failed_sends = 0
-            failed_tokens = []
+            table = self.TABLES[category]
 
-            logger.info(f"Sending push notification to {len(push_tokens)} tokens. Target type: {target_type} with data: {data}.")
+            # Convert string numbers to proper floats
+            try:
+                base_price = float(str(payload.get('base_price', 0)).replace(',', ''))
+                commission = float(str(payload.get('commission', 0)).replace(',', ''))
+            except (ValueError, TypeError):
+                base_price = 0.0
+                commission = 0.0
+
+            allowed_fields = {
+                'gsub': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value'],
+                'n3t': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value', 'cash_back', 'profit'],
+                'vtpass': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value']
+            }
             
-            ### Use bulk sending for efficiency - batch tokens into groups of 100
-            batch_size = 100
-            subtitle = request.data.get('subtitle', None)
+            to_insert = {}
             
-            if len(push_tokens) <= batch_size:
-                ### Single batch - use bulk sending
-                try:
-                    notifications = []
-                    for token in push_tokens:
-                        notification = {
-                            "token": token,
-                            "title": title,
-                            "body": body,
-                            "extra_data": data
-                        }
-                        if subtitle:
-                            notification["subtitle"] = subtitle
-                        notifications.append(notification)
-                    
-                    result = send_bulk_push_notifications(notifications)
-                    
-                    ### Process bulk result
-                    if "data" in result:
-                        for i, ticket in enumerate(result["data"]):
-                            if ticket.get("status") == "ok":
-                                successful_sends += 1
-                            else:
-                                failed_sends += 1
-                                failed_tokens.append({
-                                    "token": push_tokens[i], 
-                                    "error": ticket.get("details", {}).get("error", "Unknown error")
-                                })
-                    else:
-                        ### If no ticket data, assume all succeeded (fallback)
-                        successful_sends = len(push_tokens)
-                        
-                except Exception as e:
-                    logger.error(f"Bulk push notification failed: {str(e)}")
-                    ### Fallback to individual sending
-                    for token in push_tokens:
-                        try:
-                            send_push_notification(
-                                token=token,
-                                title=title,
-                                body=body,
-                                subtitle=subtitle,
-                                extra_data=data,
-                            )
-                            successful_sends += 1
-                        except Exception as individual_error:
-                            failed_sends += 1
-                            failed_tokens.append({"token": token, "error": str(individual_error)})
-            else:
-                # Multiple batches needed
-                for i in range(0, len(push_tokens), batch_size):
-                    batch_tokens = push_tokens[i:i + batch_size]
-                    
+            to_insert['network'] = str(payload.get('network', '')).strip()
+            to_insert['quantity'] = str(payload.get('quantity', '')).strip()
+            to_insert['duration'] = str(payload.get('duration', '')).strip()
+                
+            name = str(payload.get('name', '')).strip()
+            if name:
+                to_insert['name'] = name
+
+            to_insert['is_active'] = bool(payload.get('is_active', True))
+            to_insert['is_hidden'] = bool(payload.get('is_hidden', False))
+
+            service_id = str(payload.get('service_id', '')).strip()
+            if service_id and service_id.lower() not in ['none', '']:
+                to_insert['service_id'] = service_id
+            
+            value = str(payload.get('value', '')).strip()
+            if value and value.lower() not in ['none', '']:
+                to_insert['value'] = value
+
+            if category == 'n3t':
+                # n3t stores final price (base + commission)
+                to_insert['price'] = max(0, int(round(base_price + commission)))
+                to_insert['commission'] = max(0, int(round(commission)))
+                
+                # n3t specific fields
+                if 'cash_back' in allowed_fields[category]:
                     try:
-                        notifications = []
-                        for token in batch_tokens:
-                            notification = {
-                                "token": token,
-                                "title": title,
-                                "body": body,
-                                "extra_data": data
-                            }
-                            if subtitle:
-                                notification["subtitle"] = subtitle
-                            notifications.append(notification)
+                        cash_back = float(str(payload.get('cash_back', 0)).replace(',', ''))
+                        to_insert['cash_back'] = max(0, int(round(cash_back)))
+                    except (ValueError, TypeError):
+                        to_insert['cash_back'] = 0
                         
-                        result = send_bulk_push_notifications(notifications)
-                        
-                        # Process batch result
-                        if "data" in result:
-                            for j, ticket in enumerate(result["data"]):
-                                if ticket.get("status") == "ok":
-                                    successful_sends += 1
-                                else:
-                                    failed_sends += 1
-                                    token_index = i + j
-                                    if token_index < len(push_tokens):
-                                        failed_tokens.append({
-                                            "token": push_tokens[token_index], 
-                                            "error": ticket.get("details", {}).get("error", "Unknown error")
-                                        })
-                        else:
-                            # If no ticket data, assume all in batch succeeded
-                            successful_sends += len(batch_tokens)
-                            
-                        logger.info(f"Batch {i//batch_size + 1}: Sent to {len(batch_tokens)} tokens")
-                        
-                    except Exception as batch_error:
-                        logger.error(f"Batch {i//batch_size + 1} failed: {str(batch_error)}")
-                        # Fallback to individual sending for this batch
-                        for token in batch_tokens:
-                            try:
-                                send_push_notification(
-                                    token=token,
-                                    title=title,
-                                    body=body,
-                                    subtitle=subtitle,
-                                    extra_data=data,
-                                )
-                                successful_sends += 1
-                            except Exception as individual_error:
-                                failed_sends += 1
-                                failed_tokens.append({"token": token, "error": str(individual_error)})
-            
-            admin_user = getattr(request, 'user', None)
-            admin_email = admin_user.email if admin_user else 'system'
-            logger.info(f"Admin notification: {admin_email} sent '{title}' to {successful_sends} devices. Target type: {target_type}")
-            
-            result = {
-                "target_type": target_type,
-                "total_tokens": len(push_tokens),
-                "successful_sends": successful_sends,
-                "failed_sends": failed_sends,
-                "failed_tokens": failed_tokens[:10],
-                "notification": {
-                    "title": title,
-                    "body": body,
-                    "data": data
-                }
-            }
-            
-            return self.response(
-                data=result,
-                message=f"Push notification sent to {successful_sends} out of {len(push_tokens)} devices",
-                status_code=status.HTTP_200_OK
-            )
-            
-        except Exception as e:
-            logger.exception(f"Error in send push notification: {str(e)}")
-            return self.response(
-                error={"detail": str(e)},
-                message="Failed to send push notification",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    @action(detail=False, methods=['get'])
-    def tokens(self, request):
-        """
-        GET /admin/notifications/tokens/
-        
-        Get push token statistics and management
-        
-        Query params:
-        - user_id: Get tokens for specific user
-        - active: Filter by active status (true/false)
-        - search: Search in token or user information
-        - limit, offset: Pagination
-        
-        Returns push token information and statistics
-        """
-        try:
-            user_id = request.query_params.get('user_id')
-            active = request.query_params.get('active')
-            search = request.query_params.get('search', '').strip()
-            limit = int(request.query_params.get('limit', 50))
-            offset = int(request.query_params.get('offset', 0))
-            
-            query = supabase.table('push_tokens').select('*, profile!inner(email, full_name)')
-            
-            if user_id:
-                query = query.eq('user', user_id)
-            
-            if active is not None:
-                query = query.eq('active', active.lower() == 'true')
-            
-            if search:
-                search_terms = f"token.ilike.%{search}%,profile.email.ilike.%{search}%,profile.full_name.ilike.%{search}%"
-                query = query.or_(search_terms)
-            
-            count_response = query.execute()
-            total_count = len(count_response.data) if count_response.data else 0
-            
-            tokens_response = query.order('created_at', desc=True).range(
-                offset, offset + limit - 1
-            ).execute()
-            
-            stats_query = supabase.table('push_tokens').select('active')
-            stats_response = stats_query.execute()
-            
-            active_count = 0
-            inactive_count = 0
-            if stats_response.data:
-                active_count = len([token for token in stats_response.data if token.get('active')])
-                inactive_count = len([token for token in stats_response.data if not token.get('active')])
-                
-            result = {
-                "tokens": tokens_response.data if tokens_response.data else [],
-                "statistics": {
-                    "total_tokens": total_count,
-                    "active_tokens": active_count,
-                    "inactive_tokens": inactive_count
-                },
-            }
+                if 'profit' in allowed_fields[category]:
+                    try:
+                        profit = float(str(payload.get('profit', 0)).replace(',', ''))
+                        to_insert['profit'] = max(0, int(round(profit)))
+                    except (ValueError, TypeError):
+                        to_insert['profit'] = 0
+            else:
+                # gsub and vtpass store base price
+                to_insert['price'] = max(0, int(round(base_price)))
+                to_insert['commission'] = max(0, int(round(commission)))
 
+            # Final filter - only keep allowed fields for this table
+            filtered_insert = {k: v for k, v in to_insert.items() if k in allowed_fields.get(category, [])}
+            to_insert = filtered_insert
 
-            return self.response(
-                data=result,
-                message="Push tokens retrieved successfully",
-                status_code=status.HTTP_200_OK,
-                count=total_count,
-                next=offset + limit if offset + limit < total_count else None,
-                previous=offset - limit if offset > 0 else None
-            )
-            
-        except Exception as e:
-            logger.exception(f"Error in get push tokens: {str(e)}")
-            return self.response(
-                error={"detail": str(e)},
-                message="Failed to retrieve push tokens",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    @action(detail=False, methods=['post'])
-    def test_notification(self, request):
-        """
-        POST /admin/notifications/test_notification/
-        
-        Send a test notification to admin's own device or specified test token
-        
-        Request body:
-        {
-            "token": "expo_push_token",  // Optional test token
-            "title": "Test Notification",
-            "body": "This is a test message"
-        }
-        """
-        try:
-            test_token = request.data.get('token')
-            title = request.data.get('title', 'Test Notification')
-            body = request.data.get('body', 'This is a test push notification from iSubscribe Admin')
-            
-            if not test_token:
-                admin_user = getattr(request, 'user', None)
-                if admin_user:
-                    tokens_response = supabase.table('push_tokens').select('token').eq('user', admin_user.id).eq('active', True).limit(1).execute()
-                    if tokens_response.data:
-                        test_token = tokens_response.data[0]['token']
-            
-            if not test_token:
+            logger.info(f"Final insert data for {table}: {to_insert}")  # Debug log
+
+            result = supabase.table(table).insert(to_insert).execute()
+            row = (result.data or [None])[0]
+            if not row:
                 return self.response(
-                    error={"detail": "No test token available. Please provide a token or ensure you have an active push token."},
-                    message="Test token required",
+                    error={"detail": "Failed to create plan"},
+                    message="Failed to create plan",
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
-            
-            notification_data = {
-                "to": test_token,
-                "title": title,
-                "body": body,
-                "data": {"test": True, "timestamp": datetime.now().isoformat()}
-            }
-            
-            send_push(notification_data)
-            
-            return self.response(
-                data={"token": test_token, "notification": notification_data},
-                message="Test notification sent successfully",
-                status_code=status.HTTP_200_OK
-            )
-            
+            return self.response(data=self._normalize(row, category), status_code=status.HTTP_201_CREATED)
         except Exception as e:
-            logger.exception(f"Error in test notification: {str(e)}")
+            logger.exception(f'Error creating plan: {str(e)}')
             return self.response(
                 error={"detail": str(e)},
-                message="Failed to send test notification",
+                message="Failed to create plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def partial_update(self, request, pk=None):
+        return self.update(request, pk)
+
+    def update(self, request, pk=None):
+        try:
+            payload = request.data or {}
+            category = (payload.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if not pk:
+                return self.response(
+                    error={"detail": "Missing id"},
+                    message="Missing id",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            table = self.TABLES[category]
+            to_update = {}
+            
+            for k in ['network', 'name', 'quantity', 'duration', 'is_active', 'is_hidden', 'service_id', 'value']:
+                if k in payload:
+                    to_update[k] = payload[k]
+
+            if 'base_price' in payload or 'commission' in payload:
+                bp = float(payload.get('base_price') or 0)
+                cm = float(payload.get('commission') or 0)
+                if category == 'n3t':
+                    to_update['price'] = int(bp + cm)  # n3t stores final price as integer
+                    to_update['commission'] = int(cm)
+                else:
+                    to_update['price'] = int(bp)  # gsub/vtpass store base price as integer
+                    to_update['commission'] = int(cm)
+
+            # Handle n3t-specific fields with proper type conversion
+            if category == 'n3t':
+                if 'cash_back' in payload:
+                    cash_back = float(payload.get('cash_back') or 0)
+                    to_update['cash_back'] = int(cash_back)
+                if 'profit' in payload:
+                    profit = float(payload.get('profit') or 0)
+                    to_update['profit'] = int(profit)
+
+            result = supabase.table(table).update(to_update).eq('id', pk).execute()
+            row = (result.data or [None])[0]
+            if not row:
+                return self.response(
+                    error={"detail": "Failed to update plan"},
+                    message="Failed to update plan",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            return self.response(data=self._normalize(row, category), status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error updating plan')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to update plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def destroy(self, request, pk=None):
+        try:
+            category = (request.query_params.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if not pk:
+                return self.response(
+                    error={"detail": "Missing id"},
+                    message="Missing id",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            table = self.TABLES[category]
+            supabase.table(table).delete().eq('id', pk).execute()
+            return self.response(message='Deleted', status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error deleting plan')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to delete plan",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
