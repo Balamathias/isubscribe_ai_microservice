@@ -171,7 +171,7 @@ def process_data_bundle(request: Any):
     if not phone:
         raise ValueError("Phone number is required")
 
-    category = request.data.get('category')
+    category = category.lower() if (category := request.data.get('category')) else None
     if not category:
         raise ValueError("Data category is required")
 
