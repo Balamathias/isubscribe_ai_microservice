@@ -1382,3 +1382,289 @@ class AdminNotificationsViewSet(ViewSet, ResponseMixin):
                 message="Failed to send test notification",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AdminPlansViewSet(ViewSet, ResponseMixin):
+    """
+    Unified CRUD for data plans across categories: gsub (Best), n3t (Super), vtpass (Regular)
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    TABLES = {
+        'gsub': 'gsub',
+        'n3t': 'n3t',
+        'vtpass': 'vtpass',
+    }
+    
+    COMMON_FIELDS = 'id, network, name, quantity, duration, price, commission, is_active, is_hidden, service_id, value'
+    
+    # Fields that exist in gsub and vtpass but not n3t
+    TIMESTAMP_FIELDS = ', created_at'
+    
+    # N3T specific fields
+    N3T_EXTRA_FIELDS = ', cash_back, profit'
+
+    def _get_select_fields(self, category: str) -> str:
+        """Get appropriate select fields based on category"""
+        if category == 'n3t':
+            return self.COMMON_FIELDS + self.N3T_EXTRA_FIELDS
+        else:
+            return self.COMMON_FIELDS + self.TIMESTAMP_FIELDS
+
+    def _normalize(self, row: dict, category: str) -> dict:
+        price = float(row.get('price') or 0)
+        commission = float(row.get('commission') or 0)
+        
+        if category == 'n3t':
+            # For n3t, price includes commission
+            base_price = max(price - commission, 0)
+            final_price = price
+        else:
+            # For gsub and vtpass, price is base price
+            base_price = price
+            final_price = price + commission
+            
+        return {
+            'id': row.get('id'),
+            'category': category,
+            'network': row.get('network'),
+            'name': row.get('name'),
+            'quantity': row.get('quantity'),
+            'duration': row.get('duration'),
+            'base_price': base_price,
+            'commission': commission,
+            'final_price': final_price,
+            'is_active': row.get('is_active', True),
+            'is_hidden': row.get('is_hidden', False),
+            'service_id': row.get('service_id'),
+            'value': row.get('value'),
+            'created_at': row.get('created_at') if category != 'n3t' else None,  # n3t doesn't have created_at
+            # n3t specific fields
+            'cash_back': row.get('cash_back') if category == 'n3t' else None,
+            'profit': row.get('profit') if category == 'n3t' else None,
+        }
+
+    def list(self, request):
+        try:
+            category = (request.query_params.get('category') or 'all').lower()
+            search = (request.query_params.get('search') or '').strip()
+            network = (request.query_params.get('network') or '').strip()
+            limit = int(request.query_params.get('limit') or 50)
+            offset = int(request.query_params.get('offset') or 0)
+
+            categories = [category] if category in self.TABLES else list(self.TABLES.keys())
+            items = []
+
+            for cat in categories:
+                table = self.TABLES[cat]
+                select_fields = self._get_select_fields(cat)
+                q = supabase.table(table).select(select_fields)
+                if network:
+                    q = q.ilike('network', f'%{network}%')
+                if search:
+                    q = q.or_(
+                        f"name.ilike.%{search}%,quantity.ilike.%{search}%,duration.ilike.%{search}%,network.ilike.%{search}%"
+                    )
+                data = q.execute().data or []
+                items.extend([self._normalize(r, cat) for r in data])
+
+            total = len(items)
+            items.sort(key=lambda x: (str(x.get('network') or ''), str(x.get('quantity') or '')))
+            items = items[offset: offset + limit]
+
+            return self.response(data=items, count=total, status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error listing plans')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to list plans",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def create(self, request):
+        try:
+            payload = request.data or {}
+            logger.info(f"Create plan payload: {payload}")
+            
+            category = (payload.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            table = self.TABLES[category]
+
+            # Convert string numbers to proper floats
+            try:
+                base_price = float(str(payload.get('base_price', 0)).replace(',', ''))
+                commission = float(str(payload.get('commission', 0)).replace(',', ''))
+            except (ValueError, TypeError):
+                base_price = 0.0
+                commission = 0.0
+
+            allowed_fields = {
+                'gsub': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value'],
+                'n3t': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value', 'cash_back', 'profit'],
+                'vtpass': ['network', 'name', 'quantity', 'duration', 'price', 'commission', 'is_active', 'is_hidden', 'service_id', 'value']
+            }
+            
+            to_insert = {}
+            
+            to_insert['network'] = str(payload.get('network', '')).strip()
+            to_insert['quantity'] = str(payload.get('quantity', '')).strip()
+            to_insert['duration'] = str(payload.get('duration', '')).strip()
+                
+            name = str(payload.get('name', '')).strip()
+            if name:
+                to_insert['name'] = name
+
+            to_insert['is_active'] = bool(payload.get('is_active', True))
+            to_insert['is_hidden'] = bool(payload.get('is_hidden', False))
+
+            service_id = str(payload.get('service_id', '')).strip()
+            if service_id and service_id.lower() not in ['none', '']:
+                to_insert['service_id'] = service_id
+            
+            value = str(payload.get('value', '')).strip()
+            if value and value.lower() not in ['none', '']:
+                to_insert['value'] = value
+
+            if category == 'n3t':
+                # n3t stores final price (base + commission)
+                to_insert['price'] = max(0, int(round(base_price + commission)))
+                to_insert['commission'] = max(0, int(round(commission)))
+                
+                # n3t specific fields
+                if 'cash_back' in allowed_fields[category]:
+                    try:
+                        cash_back = float(str(payload.get('cash_back', 0)).replace(',', ''))
+                        to_insert['cash_back'] = max(0, int(round(cash_back)))
+                    except (ValueError, TypeError):
+                        to_insert['cash_back'] = 0
+                        
+                if 'profit' in allowed_fields[category]:
+                    try:
+                        profit = float(str(payload.get('profit', 0)).replace(',', ''))
+                        to_insert['profit'] = max(0, int(round(profit)))
+                    except (ValueError, TypeError):
+                        to_insert['profit'] = 0
+            else:
+                # gsub and vtpass store base price
+                to_insert['price'] = max(0, int(round(base_price)))
+                to_insert['commission'] = max(0, int(round(commission)))
+
+            # Final filter - only keep allowed fields for this table
+            filtered_insert = {k: v for k, v in to_insert.items() if k in allowed_fields.get(category, [])}
+            to_insert = filtered_insert
+
+            logger.info(f"Final insert data for {table}: {to_insert}")  # Debug log
+
+            result = supabase.table(table).insert(to_insert).execute()
+            row = (result.data or [None])[0]
+            if not row:
+                return self.response(
+                    error={"detail": "Failed to create plan"},
+                    message="Failed to create plan",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            return self.response(data=self._normalize(row, category), status_code=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.exception(f'Error creating plan: {str(e)}')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to create plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def partial_update(self, request, pk=None):
+        return self.update(request, pk)
+
+    def update(self, request, pk=None):
+        try:
+            payload = request.data or {}
+            category = (payload.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if not pk:
+                return self.response(
+                    error={"detail": "Missing id"},
+                    message="Missing id",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            table = self.TABLES[category]
+            to_update = {}
+            
+            for k in ['network', 'name', 'quantity', 'duration', 'is_active', 'is_hidden', 'service_id', 'value']:
+                if k in payload:
+                    to_update[k] = payload[k]
+
+            if 'base_price' in payload or 'commission' in payload:
+                bp = float(payload.get('base_price') or 0)
+                cm = float(payload.get('commission') or 0)
+                if category == 'n3t':
+                    to_update['price'] = int(bp + cm)  # n3t stores final price as integer
+                    to_update['commission'] = int(cm)
+                else:
+                    to_update['price'] = int(bp)  # gsub/vtpass store base price as integer
+                    to_update['commission'] = int(cm)
+
+            # Handle n3t-specific fields with proper type conversion
+            if category == 'n3t':
+                if 'cash_back' in payload:
+                    cash_back = float(payload.get('cash_back') or 0)
+                    to_update['cash_back'] = int(cash_back)
+                if 'profit' in payload:
+                    profit = float(payload.get('profit') or 0)
+                    to_update['profit'] = int(profit)
+
+            result = supabase.table(table).update(to_update).eq('id', pk).execute()
+            row = (result.data or [None])[0]
+            if not row:
+                return self.response(
+                    error={"detail": "Failed to update plan"},
+                    message="Failed to update plan",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            return self.response(data=self._normalize(row, category), status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error updating plan')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to update plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def destroy(self, request, pk=None):
+        try:
+            category = (request.query_params.get('category') or '').lower()
+            if category not in self.TABLES:
+                return self.response(
+                    error={"detail": "Invalid category"},
+                    message="Invalid category",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if not pk:
+                return self.response(
+                    error={"detail": "Missing id"},
+                    message="Missing id",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            table = self.TABLES[category]
+            supabase.table(table).delete().eq('id', pk).execute()
+            return self.response(message='Deleted', status_code=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception('Error deleting plan')
+            return self.response(
+                error={"detail": str(e)},
+                message="Failed to delete plan",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
