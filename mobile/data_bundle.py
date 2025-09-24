@@ -48,7 +48,7 @@ def get_regular_bundle(
     }
 
     try:
-        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=30)
+        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=45)
         print("DATABSTATS:", res.reason, res.status_code)
 
         if res.status_code != 200:
@@ -61,6 +61,8 @@ def get_regular_bundle(
         print("\n\nResponse Data: ", response_data)
 
         return response_data
+    except requests.exceptions.Timeout:
+        raise RuntimeError("The request timed out. Please try again.")
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(f"HTTP error occurred: {e.response.status_code} - {e.response.reason}")
     except requests.exceptions.RequestException as e:
@@ -89,7 +91,7 @@ def get_super_bundle(payload: SuperPayload) -> Union[ResponseData, None]:
         req_body['request-id'] = payload['request_id']
         req_body['network'] = mapped[payload.get('network')]
 
-        res = requests.post(f"{N3T_BASE_URL}/data", json=req_body, headers=headers, timeout=30)
+        res = requests.post(f"{N3T_BASE_URL}/data", json=req_body, headers=headers, timeout=45)
         res.raise_for_status()
         
         data = res.json()
@@ -97,6 +99,8 @@ def get_super_bundle(payload: SuperPayload) -> Union[ResponseData, None]:
         print("\n\nResponse Data: ", data)
         return data
         
+    except requests.exceptions.Timeout:
+        raise Exception("The request timed out. Please try again.")
     except requests.exceptions.HTTPError as e:
         import traceback
         traceback.print_exc()
@@ -127,7 +131,7 @@ def get_best_bundle(payload: GsubPayload) -> Union[GsubResponse, None]:
             'https://api.gsubz.com/api/pay/',
             headers=headers,
             data=url_params,
-            timeout=30
+            timeout=45
         )
         res.raise_for_status()
         
@@ -149,6 +153,8 @@ def get_best_bundle(payload: GsubPayload) -> Union[GsubResponse, None]:
             'api_response': data.get('api_response', '')
         }
         
+    except requests.exceptions.Timeout:
+        raise Exception("The request timed out. Please try again.")
     except requests.exceptions.HTTPError as e:
         raise Exception(f"HTTP error occurred: {e.response.status_code} - {e.response.reason}")
     except requests.exceptions.RequestException as e:

@@ -49,7 +49,7 @@ def buy_airtime(
     }
 
     try:
-        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=30)
+        res = requests.post(f"{VTPASS_BASE_URL}/pay", json=payload, headers=headers, timeout=45)
         print("AIRTSTATS:", res.reason, res.status_code)
 
         if res.status_code != 200:
